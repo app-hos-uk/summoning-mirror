@@ -1,0 +1,258 @@
+import type { Lang } from '../types/fandom';
+
+interface Translations {
+  title: string;
+  subtitle: string;
+  cta: string;
+  selectFandom: string;
+  wishPlaceholder: string;
+  chooseFandom: string;
+  share: string;
+  save: string;
+  newPhoto: string;
+  suggestedCaption: string;
+  cardSummoned: string;
+  shareWorld: string;
+  preparing: string;
+  sharedOk: string;
+  savedGallery: string;
+  photoSaved: string;
+  summoningCard: string;
+  initCamera: string;
+  exit: string;
+  soloMode: string;
+  groupMode: string;
+  getReady: string;
+  emailPlaceholder: string;
+  emailSend: string;
+  emailSent: string;
+  emailHint: string;
+  firstNamePlaceholder: string;
+  founderConsent: string;
+  emailSentFounder: string;
+  becomeFoundingMember: string;
+  fanCounter: string;
+  seasonalBadge: string;
+}
+
+const translations: Record<Lang, Translations> = {
+  en: {
+    title: 'THE SUMMONING MIRROR',
+    subtitle: 'Fan Curation Days 2026',
+    cta: 'BEGIN YOUR SUMMONING',
+    selectFandom: 'SELECT YOUR FANDOM',
+    wishPlaceholder: 'My universe needs...',
+    chooseFandom: 'Choose a fandom to summon your photo',
+    share: 'SHARE',
+    save: 'SAVE',
+    newPhoto: 'NEW PHOTO',
+    suggestedCaption: 'SUGGESTED CAPTION',
+    cardSummoned: 'Your card has been summoned. Share it with the world.',
+    shareWorld: 'Share it with the world.',
+    preparing: 'Preparing...',
+    sharedOk: 'Shared successfully!',
+    savedGallery: 'Photo saved \u2014 share from your gallery!',
+    photoSaved: 'Photo saved!',
+    summoningCard: 'Summoning your card...',
+    initCamera: 'Initializing camera...',
+    exit: 'EXIT',
+    soloMode: 'SOLO',
+    groupMode: 'GROUP',
+    getReady: 'Get ready!',
+    emailPlaceholder: 'Email for full-res card',
+    emailSend: 'SEND',
+    emailSent: 'Card will be emailed to you!',
+    emailHint: 'Get your full-resolution card delivered',
+    firstNamePlaceholder: 'First name',
+    founderConsent: 'Also register me as a House of Spells Founding Member',
+    emailSentFounder: 'Card saved — you\u2019re registered as a Founding Member!',
+    becomeFoundingMember: 'BECOME A FOUNDING MEMBER',
+    fanCounter: 'fan to visit House of Spells NYC!',
+    seasonalBadge: 'OPENING WEEK SPECIAL',
+  },
+  es: {
+    title: 'EL ESPEJO DE INVOCACI\u00D3N',
+    subtitle: 'D\u00EDas de Curadur\u00EDa Fan 2026',
+    cta: 'COMIENZA TU INVOCACI\u00D3N',
+    selectFandom: 'ELIGE TU FANDOM',
+    wishPlaceholder: 'Mi universo necesita...',
+    chooseFandom: 'Elige un fandom para invocar tu foto',
+    share: 'COMPARTIR',
+    save: 'GUARDAR',
+    newPhoto: 'NUEVA FOTO',
+    suggestedCaption: 'SUGERENCIA DE TEXTO',
+    cardSummoned: 'Tu tarjeta ha sido invocada. Comp\u00E1rtela con el mundo.',
+    shareWorld: 'Comp\u00E1rtela con el mundo.',
+    preparing: 'Preparando...',
+    sharedOk: '\u00A1Compartido exitosamente!',
+    savedGallery: 'Foto guardada \u2014 \u00A1comp\u00E1rtela desde tu galer\u00EDa!',
+    photoSaved: '\u00A1Foto guardada!',
+    summoningCard: 'Invocando tu tarjeta...',
+    initCamera: 'Inicializando c\u00E1mara...',
+    exit: 'SALIR',
+    soloMode: 'SOLO',
+    groupMode: 'GRUPO',
+    getReady: '\u00A1Prep\u00E1rate!',
+    emailPlaceholder: 'Email para tarjeta en alta resoluci\u00F3n',
+    emailSend: 'ENVIAR',
+    emailSent: '\u00A1La tarjeta ser\u00E1 enviada a tu email!',
+    emailHint: 'Recibe tu tarjeta en alta resoluci\u00F3n',
+    firstNamePlaceholder: 'Nombre',
+    founderConsent: 'Tambi\u00E9n reg\u00EDstrame como Miembro Fundador de House of Spells',
+    emailSentFounder: '\u00A1Tarjeta guardada y registrado como Miembro Fundador!',
+    becomeFoundingMember: 'HAZTE MIEMBRO FUNDADOR',
+    fanCounter: '\u00A1fan en visitar House of Spells NYC!',
+    seasonalBadge: 'ESPECIAL SEMANA DE APERTURA',
+  },
+  zh: {
+    title: '\u53EC\u5524\u4E4B\u955C',
+    subtitle: '2026\u7C89\u4E1D\u7B56\u5C55\u65E5',
+    cta: '\u5F00\u59CB\u53EC\u5524',
+    selectFandom: '\u9009\u62E9\u4F60\u7684\u7C89\u4E1D\u56E2',
+    wishPlaceholder: '\u6211\u7684\u5B87\u5B99\u9700\u8981...',
+    chooseFandom: '\u9009\u62E9\u4E00\u4E2A\u7C89\u4E1D\u56E2\u6765\u53EC\u5524\u4F60\u7684\u7167\u7247',
+    share: '\u5206\u4EAB',
+    save: '\u4FDD\u5B58',
+    newPhoto: '\u65B0\u7167\u7247',
+    suggestedCaption: '\u63A8\u8350\u6587\u6848',
+    cardSummoned: '\u4F60\u7684\u5361\u7247\u5DF2\u53EC\u5524\u3002\u5206\u4EAB\u7ED9\u4E16\u754C\u3002',
+    shareWorld: '\u5206\u4EAB\u7ED9\u4E16\u754C\u3002',
+    preparing: '\u51C6\u5907\u4E2D...',
+    sharedOk: '\u5206\u4EAB\u6210\u529F\uFF01',
+    savedGallery: '\u7167\u7247\u5DF2\u4FDD\u5B58 \u2014 \u4ECE\u76F8\u518C\u5206\u4EAB\uFF01',
+    photoSaved: '\u7167\u7247\u5DF2\u4FDD\u5B58\uFF01',
+    summoningCard: '\u6B63\u5728\u53EC\u5524\u4F60\u7684\u5361\u7247...',
+    initCamera: '\u521D\u59CB\u5316\u6444\u50CF\u5934...',
+    exit: '\u9000\u51FA',
+    soloMode: '\u5355\u4EBA',
+    groupMode: '\u7FA4\u7EC4',
+    getReady: '\u51C6\u5907\u597D\uFF01',
+    emailPlaceholder: '\u90AE\u7BB1\u63A5\u6536\u9AD8\u6E05\u5361\u7247',
+    emailSend: '\u53D1\u9001',
+    emailSent: '\u5361\u7247\u5C06\u53D1\u9001\u5230\u4F60\u7684\u90AE\u7BB1\uFF01',
+    emailHint: '\u83B7\u53D6\u9AD8\u5206\u8FA8\u7387\u5361\u7247',
+    firstNamePlaceholder: '\u540D\u5B57',
+    founderConsent: '\u540C\u65F6\u6CE8\u518C\u4E3A House of Spells \u521B\u59CB\u4F1A\u5458',
+    emailSentFounder: '\u5361\u7247\u5DF2\u4FDD\u5B58 \u2014 \u60A8\u5DF2\u6CE8\u518C\u4E3A\u521B\u59CB\u4F1A\u5458\uFF01',
+    becomeFoundingMember: '\u6210\u4E3A\u521B\u59CB\u4F1A\u5458',
+    fanCounter: '\u4F4D\u7C89\u4E1D\u8BBF\u95EEHouse of Spells NYC\uFF01',
+    seasonalBadge: '\u5F00\u4E1A\u5468\u7279\u522B\u7248',
+  },
+  ja: {
+    title: '\u53EC\u559A\u306E\u93E1',
+    subtitle: '\u30D5\u30A1\u30F3\u30AD\u30E5\u30EC\u30FC\u30B7\u30E7\u30F3\u30C7\u30A4\u30BA2026',
+    cta: '\u53EC\u559A\u3092\u59CB\u3081\u308B',
+    selectFandom: '\u30D5\u30A1\u30F3\u30C0\u30E0\u3092\u9078\u3093\u3067\u304F\u3060\u3055\u3044',
+    wishPlaceholder: '\u79C1\u306E\u5B87\u5B99\u306B\u306F...',
+    chooseFandom: '\u30D5\u30A1\u30F3\u30C0\u30E0\u3092\u9078\u3093\u3067\u5199\u771F\u3092\u53EC\u559A',
+    share: '\u30B7\u30A7\u30A2',
+    save: '\u4FDD\u5B58',
+    newPhoto: '\u65B0\u3057\u3044\u5199\u771F',
+    suggestedCaption: '\u304A\u3059\u3059\u3081\u30AD\u30E3\u30D7\u30B7\u30E7\u30F3',
+    cardSummoned: '\u30AB\u30FC\u30C9\u304C\u53EC\u559A\u3055\u308C\u307E\u3057\u305F\u3002\u4E16\u754C\u306B\u30B7\u30A7\u30A2\u3057\u3088\u3046\u3002',
+    shareWorld: '\u4E16\u754C\u306B\u30B7\u30A7\u30A2\u3057\u3088\u3046\u3002',
+    preparing: '\u6E96\u5099\u4E2D...',
+    sharedOk: '\u30B7\u30A7\u30A2\u6210\u529F\uFF01',
+    savedGallery: '\u5199\u771F\u304C\u4FDD\u5B58\u3055\u308C\u307E\u3057\u305F \u2014 \u30AE\u30E3\u30E9\u30EA\u30FC\u304B\u3089\u30B7\u30A7\u30A2\uFF01',
+    photoSaved: '\u5199\u771F\u304C\u4FDD\u5B58\u3055\u308C\u307E\u3057\u305F\uFF01',
+    summoningCard: '\u30AB\u30FC\u30C9\u3092\u53EC\u559A\u4E2D...',
+    initCamera: '\u30AB\u30E1\u30E9\u3092\u521D\u671F\u5316\u4E2D...',
+    exit: '\u7D42\u4E86',
+    soloMode: '\u30BD\u30ED',
+    groupMode: '\u30B0\u30EB\u30FC\u30D7',
+    getReady: '\u6E96\u5099\u3057\u3066\uFF01',
+    emailPlaceholder: '\u9AD8\u89E3\u50CF\u5EA6\u30AB\u30FC\u30C9\u306E\u30E1\u30FC\u30EB',
+    emailSend: '\u9001\u4FE1',
+    emailSent: '\u30AB\u30FC\u30C9\u3092\u30E1\u30FC\u30EB\u3067\u304A\u5C4A\u3051\u3057\u307E\u3059\uFF01',
+    emailHint: '\u9AD8\u89E3\u50CF\u5EA6\u30AB\u30FC\u30C9\u3092\u53D7\u3051\u53D6\u308B',
+    firstNamePlaceholder: '\u540D\u524D',
+    founderConsent: 'House of Spells\u306E\u5275\u8A2D\u30E1\u30F3\u30D0\u30FC\u306B\u3082\u767B\u9332\u3059\u308B',
+    emailSentFounder: '\u30AB\u30FC\u30C9\u4FDD\u5B58\u6E08\u307F \u2014 \u5275\u8A2D\u30E1\u30F3\u30D0\u30FC\u767B\u9332\u5B8C\u4E86\uFF01',
+    becomeFoundingMember: '\u5275\u8A2D\u30E1\u30F3\u30D0\u30FC\u306B\u306A\u308B',
+    fanCounter: '\u756A\u76EE\u306E\u30D5\u30A1\u30F3\u304CHouse of Spells NYC\u3092\u8A2A\u554F\uFF01',
+    seasonalBadge: '\u30AA\u30FC\u30D7\u30CB\u30F3\u30B0\u30A6\u30A3\u30FC\u30AF\u7279\u5225',
+  },
+  ko: {
+    title: '\uC18C\uD658\uC758 \uAC70\uC6B8',
+    subtitle: '\uD32C \uD050\uB808\uC774\uC158 \uB370\uC774\uC988 2026',
+    cta: '\uC18C\uD658\uC744 \uC2DC\uC791\uD558\uC138\uC694',
+    selectFandom: '\uD32C\uB364\uC744 \uC120\uD0DD\uD558\uC138\uC694',
+    wishPlaceholder: '\uB0B4 \uC6B0\uC8FC\uC5D0 \uD544\uC694\uD55C \uAC83\uC740...',
+    chooseFandom: '\uD32C\uB364\uC744 \uC120\uD0DD\uD558\uC5EC \uC0AC\uC9C4\uC744 \uC18C\uD658\uD558\uC138\uC694',
+    share: '\uACF5\uC720',
+    save: '\uC800\uC7A5',
+    newPhoto: '\uC0C8 \uC0AC\uC9C4',
+    suggestedCaption: '\uCD94\uCC9C \uCEA1\uC158',
+    cardSummoned: '\uCE74\uB4DC\uAC00 \uC18C\uD658\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uC138\uC0C1\uACFC \uACF5\uC720\uD558\uC138\uC694.',
+    shareWorld: '\uC138\uC0C1\uACFC \uACF5\uC720\uD558\uC138\uC694.',
+    preparing: '\uC900\uBE44 \uC911...',
+    sharedOk: '\uACF5\uC720 \uC131\uACF5!',
+    savedGallery: '\uC0AC\uC9C4 \uC800\uC7A5\uB428 \u2014 \uAC24\uB7EC\uB9AC\uC5D0\uC11C \uACF5\uC720\uD558\uC138\uC694!',
+    photoSaved: '\uC0AC\uC9C4 \uC800\uC7A5\uB428!',
+    summoningCard: '\uCE74\uB4DC\uB97C \uC18C\uD658 \uC911...',
+    initCamera: '\uCE74\uBA54\uB77C \uCD08\uAE30\uD654 \uC911...',
+    exit: '\uC885\uB8CC',
+    soloMode: '\uC194\uB85C',
+    groupMode: '\uADF8\uB8F9',
+    getReady: '\uC900\uBE44\uD558\uC138\uC694!',
+    emailPlaceholder: '\uACE0\uD574\uC0C1\uB3C4 \uCE74\uB4DC \uC774\uBA54\uC77C',
+    emailSend: '\uBCF4\uB0B4\uAE30',
+    emailSent: '\uCE74\uB4DC\uAC00 \uC774\uBA54\uC77C\uB85C \uC804\uC1A1\uB429\uB2C8\uB2E4!',
+    emailHint: '\uACE0\uD574\uC0C1\uB3C4 \uCE74\uB4DC \uBC1B\uAE30',
+    firstNamePlaceholder: '\uC774\uB984',
+    founderConsent: 'House of Spells \uCC3D\uC124 \uBA64\uBC84\uB85C\uB3C4 \uB4F1\uB85D',
+    emailSentFounder: '\uCE74\uB4DC \uC800\uC7A5 \u2014 \uCC3D\uC124 \uBA64\uBC84 \uB4F1\uB85D \uC644\uB8CC!',
+    becomeFoundingMember: '\uCC3D\uC124 \uBA64\uBC84 \uB4F1\uB85D',
+    fanCounter: '\uBC88\uC9F8 \uD32C\uC774 House of Spells NYC\uB97C \uBC29\uBB38!',
+    seasonalBadge: '\uC624\uD508\uB2DD \uC704\uD06C \uD2B9\uBCC4',
+  },
+  fr: {
+    title: 'LE MIROIR D\'INVOCATION',
+    subtitle: 'Journ\u00E9es de Curation Fan 2026',
+    cta: 'COMMENCEZ VOTRE INVOCATION',
+    selectFandom: 'CHOISISSEZ VOTRE FANDOM',
+    wishPlaceholder: 'Mon univers a besoin de...',
+    chooseFandom: 'Choisissez un fandom pour invoquer votre photo',
+    share: 'PARTAGER',
+    save: 'SAUVEGARDER',
+    newPhoto: 'NOUVELLE PHOTO',
+    suggestedCaption: 'L\u00C9GENDE SUGG\u00C9R\u00C9E',
+    cardSummoned: 'Votre carte a \u00E9t\u00E9 invoqu\u00E9e. Partagez-la avec le monde.',
+    shareWorld: 'Partagez-la avec le monde.',
+    preparing: 'Pr\u00E9paration...',
+    sharedOk: 'Partag\u00E9 avec succ\u00E8s !',
+    savedGallery: 'Photo sauvegard\u00E9e \u2014 partagez depuis votre galerie !',
+    photoSaved: 'Photo sauvegard\u00E9e !',
+    summoningCard: 'Invocation de votre carte...',
+    initCamera: 'Initialisation de la cam\u00E9ra...',
+    exit: 'QUITTER',
+    soloMode: 'SOLO',
+    groupMode: 'GROUPE',
+    getReady: 'Pr\u00E9parez-vous !',
+    emailPlaceholder: 'Email pour carte haute r\u00E9solution',
+    emailSend: 'ENVOYER',
+    emailSent: 'La carte sera envoy\u00E9e par email !',
+    emailHint: 'Recevez votre carte en haute r\u00E9solution',
+    firstNamePlaceholder: 'Pr\u00E9nom',
+    founderConsent: 'M\u2019inscrire aussi comme Membre Fondateur House of Spells',
+    emailSentFounder: 'Carte enregistr\u00E9e \u2014 vous \u00EAtes Membre Fondateur !',
+    becomeFoundingMember: 'DEVENIR MEMBRE FONDATEUR',
+    fanCounter: 'fan \u00E0 visiter House of Spells NYC !',
+    seasonalBadge: 'SP\u00C9CIAL SEMAINE D\'OUVERTURE',
+  },
+};
+
+export function t(lang: Lang): Translations {
+  return translations[lang] || translations.en;
+}
+
+export const LANG_LABELS: Record<Lang, string> = {
+  en: 'English',
+  es: 'Espa\u00F1ol',
+  zh: '\u4E2D\u6587',
+  ja: '\u65E5\u672C\u8A9E',
+  ko: '\uD55C\uAD6D\uC5B4',
+  fr: 'Fran\u00E7ais',
+};
+
+export const ALL_LANGS: Lang[] = ['en', 'es', 'zh', 'ja', 'ko', 'fr'];

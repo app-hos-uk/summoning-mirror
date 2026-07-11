@@ -1,0 +1,356 @@
+{
+  "fandoms": [
+    {
+      "id": "marvel",
+      "displayName": "Marvel",
+      "accentColor": "#E62429",
+      "sortOrder": 1,
+      "stripImage": "marvel.jpg",
+      "enabled": true
+    },
+    {
+      "id": "star-wars",
+      "displayName": "Star Wars",
+      "accentColor": "#FFE81F",
+      "sortOrder": 2,
+      "stripImage": "star-wars.jpg",
+      "enabled": true
+    },
+    {
+      "id": "dc",
+      "displayName": "DC Universe",
+      "accentColor": "#0476F2",
+      "sortOrder": 3,
+      "stripImage": "dc.jpg",
+      "enabled": true
+    },
+    {
+      "id": "game-of-thrones",
+      "displayName": "Game of Thrones",
+      "accentColor": "#8B1A1A",
+      "sortOrder": 4,
+      "stripImage": "game-of-thrones.jpg",
+      "enabled": true
+    },
+    {
+      "id": "wizarding-world",
+      "displayName": "Wizarding World",
+      "accentColor": "#946B2D",
+      "sortOrder": 5,
+      "stripImage": "wizarding-world.jpg",
+      "enabled": true
+    },
+    {
+      "id": "lord-of-the-rings",
+      "displayName": "Lord of the Rings",
+      "accentColor": "#2E8B57",
+      "sortOrder": 6,
+      "stripImage": "lord-of-the-rings.jpg",
+      "enabled": true
+    },
+    {
+      "id": "naruto",
+      "displayName": "Naruto",
+      "accentColor": "#FF6B00",
+      "sortOrder": 7,
+      "stripImage": "naruto.jpg",
+      "enabled": true
+    },
+    {
+      "id": "stranger-things",
+      "displayName": "Stranger Things",
+      "accentColor": "#E50914",
+      "sortOrder": 8,
+      "stripImage": "stranger-things.jpg",
+      "enabled": true
+    },
+    {
+      "id": "studio-ghibli",
+      "displayName": "Studio Ghibli",
+      "accentColor": "#4A90D9",
+      "sortOrder": 9,
+      "stripImage": "studio-ghibli.jpg",
+      "enabled": true
+    },
+    {
+      "id": "avatar",
+      "displayName": "Avatar",
+      "accentColor": "#3498DB",
+      "sortOrder": 10,
+      "stripImage": "avatar.jpg",
+      "enabled": true
+    },
+    {
+      "id": "disney",
+      "displayName": "Disney",
+      "accentColor": "#1A3C8F",
+      "sortOrder": 11,
+      "stripImage": "disney.jpg",
+      "enabled": true
+    },
+    {
+      "id": "the-witcher",
+      "displayName": "The Witcher",
+      "accentColor": "#8B0000",
+      "sortOrder": 12,
+      "stripImage": "the-witcher.jpg",
+      "enabled": true
+    },
+    {
+      "id": "pokemon",
+      "displayName": "Pokémon",
+      "accentColor": "#FFCB05",
+      "sortOrder": 13,
+      "stripImage": "pokemon.jpg",
+      "enabled": true
+    },
+    {
+      "id": "dragon-ball",
+      "displayName": "Dragon Ball",
+      "accentColor": "#F7941D",
+      "sortOrder": 14,
+      "stripImage": "dragon-ball.jpg",
+      "enabled": true
+    },
+    {
+      "id": "one-piece",
+      "displayName": "One Piece",
+      "accentColor": "#D41920",
+      "sortOrder": 15,
+      "stripImage": "one-piece.jpg",
+      "enabled": true
+    },
+    {
+      "id": "demon-slayer",
+      "displayName": "Demon Slayer",
+      "accentColor": "#00C9A7",
+      "sortOrder": 16,
+      "stripImage": "demon-slayer.jpg",
+      "enabled": true
+    },
+    {
+      "id": "attack-on-titan",
+      "displayName": "Attack on Titan",
+      "accentColor": "#4B8B3B",
+      "sortOrder": 17,
+      "stripImage": "attack-on-titan.jpg",
+      "enabled": true
+    },
+    {
+      "id": "my-hero-academia",
+      "displayName": "My Hero Academia",
+      "accentColor": "#49B04D",
+      "sortOrder": 18,
+      "stripImage": "my-hero-academia.jpg",
+      "enabled": true
+    },
+    {
+      "id": "jujutsu-kaisen",
+      "displayName": "Jujutsu Kaisen",
+      "accentColor": "#6B3FA0",
+      "sortOrder": 19,
+      "stripImage": "jujutsu-kaisen.jpg",
+      "enabled": true
+    },
+    {
+      "id": "spider-man",
+      "displayName": "Spider-Man",
+      "accentColor": "#E21A22",
+      "sortOrder": 20,
+      "stripImage": "spider-man.jpg",
+      "enabled": true
+    },
+    {
+      "id": "batman",
+      "displayName": "Batman",
+      "accentColor": "#1B1B1B",
+      "sortOrder": 21,
+      "stripImage": "batman.jpg",
+      "enabled": true
+    },
+    {
+      "id": "superman",
+      "displayName": "Superman",
+      "accentColor": "#0066CC",
+      "sortOrder": 22,
+      "stripImage": "superman.jpg",
+      "enabled": true
+    },
+    {
+      "id": "x-men",
+      "displayName": "X-Men",
+      "accentColor": "#FFD700",
+      "sortOrder": 23,
+      "stripImage": "x-men.jpg",
+      "enabled": true
+    },
+    {
+      "id": "deadpool",
+      "displayName": "Deadpool",
+      "accentColor": "#CC0000",
+      "sortOrder": 24,
+      "stripImage": "deadpool.jpg",
+      "enabled": true
+    },
+    {
+      "id": "jurassic-world",
+      "displayName": "Jurassic World",
+      "accentColor": "#3A7D44",
+      "sortOrder": 25,
+      "stripImage": "jurassic-world.jpg",
+      "enabled": true
+    },
+    {
+      "id": "transformers",
+      "displayName": "Transformers",
+      "accentColor": "#0050A0",
+      "sortOrder": 26,
+      "stripImage": "transformers.jpg",
+      "enabled": true
+    },
+    {
+      "id": "hunger-games",
+      "displayName": "Hunger Games",
+      "accentColor": "#D4A017",
+      "sortOrder": 27,
+      "stripImage": "hunger-games.jpg",
+      "enabled": true
+    },
+    {
+      "id": "percy-jackson",
+      "displayName": "Percy Jackson",
+      "accentColor": "#1E90FF",
+      "sortOrder": 28,
+      "stripImage": "percy-jackson.jpg",
+      "enabled": true
+    },
+    {
+      "id": "the-matrix",
+      "displayName": "The Matrix",
+      "accentColor": "#00FF41",
+      "sortOrder": 29,
+      "stripImage": "the-matrix.jpg",
+      "enabled": true
+    },
+    {
+      "id": "dune",
+      "displayName": "Dune",
+      "accentColor": "#C2A366",
+      "sortOrder": 30,
+      "stripImage": "dune.jpg",
+      "enabled": true
+    },
+    {
+      "id": "indiana-jones",
+      "displayName": "Indiana Jones",
+      "accentColor": "#8B6914",
+      "sortOrder": 31,
+      "stripImage": "indiana-jones.jpg",
+      "enabled": true
+    },
+    {
+      "id": "ghostbusters",
+      "displayName": "Ghostbusters",
+      "accentColor": "#00B300",
+      "sortOrder": 32,
+      "stripImage": "ghostbusters.jpg",
+      "enabled": true
+    },
+    {
+      "id": "back-to-the-future",
+      "displayName": "Back to the Future",
+      "accentColor": "#FF4500",
+      "sortOrder": 33,
+      "stripImage": "back-to-the-future.jpg",
+      "enabled": true
+    },
+    {
+      "id": "john-wick",
+      "displayName": "John Wick",
+      "accentColor": "#B8860B",
+      "sortOrder": 34,
+      "stripImage": "john-wick.jpg",
+      "enabled": true
+    },
+    {
+      "id": "the-walking-dead",
+      "displayName": "The Walking Dead",
+      "accentColor": "#556B2F",
+      "sortOrder": 35,
+      "stripImage": "the-walking-dead.jpg",
+      "enabled": true
+    },
+    {
+      "id": "rick-and-morty",
+      "displayName": "Rick and Morty",
+      "accentColor": "#97CE4C",
+      "sortOrder": 36,
+      "stripImage": "rick-and-morty.jpg",
+      "enabled": true
+    },
+    {
+      "id": "sailor-moon",
+      "displayName": "Sailor Moon",
+      "accentColor": "#FF69B4",
+      "sortOrder": 37,
+      "stripImage": "sailor-moon.jpg",
+      "enabled": true
+    },
+    {
+      "id": "zelda",
+      "displayName": "Legend of Zelda",
+      "accentColor": "#1E8C45",
+      "sortOrder": 38,
+      "stripImage": "zelda.jpg",
+      "enabled": true
+    },
+    {
+      "id": "final-fantasy",
+      "displayName": "Final Fantasy",
+      "accentColor": "#3A5FCD",
+      "sortOrder": 39,
+      "stripImage": "final-fantasy.jpg",
+      "enabled": true
+    },
+    {
+      "id": "god-of-war",
+      "displayName": "God of War",
+      "accentColor": "#8B0000",
+      "sortOrder": 40,
+      "stripImage": "god-of-war.jpg",
+      "enabled": true
+    },
+    {
+      "id": "halo",
+      "displayName": "Halo",
+      "accentColor": "#00A86B",
+      "sortOrder": 41,
+      "stripImage": "halo.jpg",
+      "enabled": true
+    },
+    {
+      "id": "minecraft",
+      "displayName": "Minecraft",
+      "accentColor": "#62B233",
+      "sortOrder": 42,
+      "stripImage": "minecraft.jpg",
+      "enabled": true
+    },
+    {
+      "id": "chronicles-of-narnia",
+      "displayName": "Narnia",
+      "accentColor": "#C49A6C",
+      "sortOrder": 43,
+      "stripImage": "chronicles-of-narnia.jpg",
+      "enabled": true
+    },
+    {
+      "id": "twilight",
+      "displayName": "Twilight",
+      "accentColor": "#6A0DAD",
+      "sortOrder": 44,
+      "stripImage": "twilight.jpg",
+      "enabled": true
+    }
+  ]
+}
