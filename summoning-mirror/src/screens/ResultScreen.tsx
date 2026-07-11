@@ -196,63 +196,80 @@ export default function ResultScreen({
           </p>
         </div>
 
-        {/* Card pair */}
-        <div className="flex gap-3 sm:gap-4 justify-center items-start overflow-x-auto pb-2" style={{ scrollSnapType: 'x mandatory' }}>
-          {(['midnight-foil', 'holo-passport'] as const).map((variant) => (
-            <button
-              key={variant}
-              type="button"
-              onClick={() => setSelectedVariant(variant)}
-              className="flex-shrink-0 cursor-pointer transition-all duration-300"
-              style={{
-                scrollSnapAlign: 'center',
-                transform: `scale(${selfieDataUrl ? 0.42 : 0.38})`,
-                transformOrigin: 'top center',
-                outline: selectedVariant === variant ? '3px solid #d4a94a' : '3px solid transparent',
-                outlineOffset: 6,
-                borderRadius: variant === 'holo-passport' ? 22 : 6,
-                opacity: selfieDataUrl ? (cardRevealed ? 1 : 0.3) : 0.1,
-                transition: 'opacity 0.8s ease, transform 0.5s ease, outline-color 0.3s ease',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-              }}>
-              <SelfieCard
-                ref={variant === 'midnight-foil' ? card1ARef : card1DRef}
-                variant={variant}
-                {...cardProps}
-              />
-            </button>
-          ))}
+        {/* Card pair — scale cards and collapse wrapper to scaled size */}
+        <div className="flex gap-4 sm:gap-6 justify-center items-start pb-2">
+          {(['midnight-foil', 'holo-passport'] as const).map((variant) => {
+            const scale = 0.44;
+            const w = Math.round(560 * scale);
+            const h = Math.round(760 * scale);
+            const isSelected = selectedVariant === variant;
+            return (
+              <button
+                key={variant}
+                type="button"
+                onClick={() => setSelectedVariant(variant)}
+                className="cursor-pointer transition-all duration-300"
+                style={{
+                  width: w,
+                  height: h,
+                  position: 'relative',
+                  overflow: 'visible',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  flexShrink: 0,
+                }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'top left',
+                  opacity: selfieDataUrl ? (cardRevealed ? 1 : 0.3) : 0.1,
+                  transition: 'opacity 0.8s ease',
+                  outline: isSelected ? '4px solid #d4a94a' : '4px solid transparent',
+                  outlineOffset: 4,
+                  borderRadius: variant === 'holo-passport' ? 22 : 6,
+                }}>
+                  <SelfieCard
+                    ref={variant === 'midnight-foil' ? card1ARef : card1DRef}
+                    variant={variant}
+                    {...cardProps}
+                  />
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Variant labels */}
-        <div className="flex justify-center gap-8 mt-1">
-          {(['midnight-foil', 'holo-passport'] as const).map((variant) => (
-            <button
-              key={variant}
-              type="button"
-              onClick={() => setSelectedVariant(variant)}
-              className="cursor-pointer transition-all"
-              style={{
-                font: "600 9px/1 'JetBrains Mono', monospace",
-                letterSpacing: '0.14em',
-                color: selectedVariant === variant ? '#d4a94a' : '#6c6858',
-                background: 'none', border: 'none', padding: '4px 8px',
-              }}>
-              {variant === 'midnight-foil' ? '1A · MIDNIGHT FOIL' : '1D · HOLO PASSPORT'}
-              {selectedVariant === variant && (
+        <div className="flex justify-center gap-4 sm:gap-6 mt-2">
+          {(['midnight-foil', 'holo-passport'] as const).map((variant) => {
+            const isSelected = selectedVariant === variant;
+            return (
+              <button
+                key={variant}
+                type="button"
+                onClick={() => setSelectedVariant(variant)}
+                className="cursor-pointer transition-all"
+                style={{
+                  width: Math.round(560 * 0.44),
+                  textAlign: 'center',
+                  font: "600 9px/1 'JetBrains Mono', monospace",
+                  letterSpacing: '0.14em',
+                  color: isSelected ? '#d4a94a' : '#6c6858',
+                  background: 'none', border: 'none', padding: '4px 0',
+                  flexShrink: 0,
+                }}>
+                {variant === 'midnight-foil' ? '1A · MIDNIGHT FOIL' : '1D · HOLO PASSPORT'}
                 <span style={{ marginLeft: 6 }}>
-                  <Download size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                  {isSelected
+                    ? <Download size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                    : <Mail size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />}
                 </span>
-              )}
-              {selectedVariant !== variant && (
-                <span style={{ marginLeft: 6 }}>
-                  <Mail size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />
-                </span>
-              )}
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
 
