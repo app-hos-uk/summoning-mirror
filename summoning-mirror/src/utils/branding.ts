@@ -27,6 +27,12 @@ export const BRAND = {
     '#TimesSquare',
   ],
   qrUrl: 'https://houseofspells.com/nyc',
+  social: {
+    instagram: '@houseofspellsnyc',
+    tiktok: '@houseofspellsnyc',
+    twitter: '@houseofspellsnyc',
+    whatsapp: '',
+  },
   assets: {
     emblem: '/branding/emblem.png',
     emblemCircle: '/branding/emblem-circle.png',

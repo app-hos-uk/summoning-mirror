@@ -79,3 +79,45 @@ export async function submitEmail(email: string, fandomId: string): Promise<bool
     return false;
   }
 }
+
+export async function uploadPhoto(
+  blob: Blob,
+  fandomId: string,
+  fandomName: string
+): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append('image', blob, 'SummoningMirror_HouseOfSpells.jpg');
+    form.append('fandomId', fandomId);
+    form.append('fandomName', fandomName);
+
+    const res = await fetch('/api/photos/upload', {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.id as string;
+  } catch {
+    return null;
+  }
+}
+
+export async function sendPhotoEmail(
+  photoId: string,
+  email: string,
+  firstName: string,
+  fandomName: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/photos/${photoId}/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, firstName, fandomName }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

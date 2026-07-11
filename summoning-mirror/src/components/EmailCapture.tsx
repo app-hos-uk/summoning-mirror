@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Mail, Send, Check } from 'lucide-react';
-import { submitEmail } from '../hooks/useAnalytics';
+import { submitEmail, sendPhotoEmail } from '../hooks/useAnalytics';
 import { registerFounderMember } from '../utils/loyalty';
 import type { Lang } from '../types/fandom';
 import { t } from '../utils/i18n';
@@ -9,14 +9,16 @@ interface Props {
   fandomId: string;
   fandomName: string;
   lang: Lang;
+  photoId?: string | null;
 }
 
-export default function EmailCapture({ fandomId, fandomName, lang }: Props) {
+export default function EmailCapture({ fandomId, fandomName, lang, photoId }: Props) {
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(true);
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [sentWithFounder, setSentWithFounder] = useState(false);
+  const [photoEmailed, setPhotoEmailed] = useState(false);
   const formStartedAt = useRef(Date.now());
   const i = t(lang);
 
@@ -32,6 +34,12 @@ export default function EmailCapture({ fandomId, fandomName, lang }: Props) {
       setStatus('idle');
       return;
     }
+
+    let emailed = false;
+    if (photoId) {
+      emailed = await sendPhotoEmail(photoId, email.trim(), firstName.trim(), fandomName);
+    }
+    setPhotoEmailed(emailed);
 
     if (consent) {
       await registerFounderMember({
@@ -55,7 +63,9 @@ export default function EmailCapture({ fandomId, fandomName, lang }: Props) {
         }}>
         <Check size={14} style={{ color: 'rgba(50,200,80,0.8)' }} />
         <span className="text-xs tracking-wider" style={{ color: 'rgba(50,200,80,0.8)' }}>
-          {sentWithFounder ? i.emailSentFounder : i.emailSent}
+          {sentWithFounder
+            ? (photoEmailed ? i.emailSentFounder : i.emailRegisteredFounder)
+            : (photoEmailed ? i.emailSent : i.emailRegistered)}
         </span>
       </div>
     );

@@ -6,10 +6,19 @@ import { BRAND, getShareTextForFandom } from '../utils/branding';
 import { getFounderRegisterUrl } from '../utils/loyalty';
 import { t } from '../utils/i18n';
 import { compositeImage } from '../utils/compositor';
-import { shareImage, saveImage } from '../utils/share';
+import {
+  shareImage,
+  saveImage,
+  shareToInstagram,
+  shareToTikTok,
+  shareToWhatsApp,
+  shareToTwitter,
+  canvasToUploadBlob,
+  type ShareResult,
+} from '../utils/share';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { playRevealSound } from '../utils/sounds';
-import { trackCardGenerated, trackShare } from '../hooks/useAnalytics';
+import { trackCardGenerated, trackShare, uploadPhoto } from '../hooks/useAnalytics';
 import FanCounter from '../components/FanCounter';
 import EmailCapture from '../components/EmailCapture';
 
@@ -38,13 +47,15 @@ export default function ResultScreen({
   const [showPrideBanner, setShowPrideBanner] = useState(false);
   const [cardRevealed, setCardRevealed] = useState(false);
   const [interactionReady, setInteractionReady] = useState(false);
+  const [photoId, setPhotoId] = useState<string | null>(null);
   const i = t(lang);
   const isGroup = captureMode === 'group';
+  const shareText = getShareTextForFandom(fandom.displayName, isGroup);
 
-  // Block all navigation interactions for 600ms after mount to prevent
-  // ghost touch/click events from the capture button tap-through.
+  // Keep the photo card visible for 5 seconds so users can share/save,
+  // and also prevents ghost touch events from the capture button.
   useEffect(() => {
-    const guard = setTimeout(() => setInteractionReady(true), 600);
+    const guard = setTimeout(() => setInteractionReady(true), 5000);
     return () => clearTimeout(guard);
   }, []);
 
@@ -108,6 +119,16 @@ export default function ResultScreen({
       setCompositing(false);
       trackCardGenerated(fandom.id, fandom.displayName);
 
+      if (canvasRef.current && !cancelled) {
+        try {
+          const blob = await canvasToUploadBlob(canvasRef.current);
+          const id = await uploadPhoto(blob, fandom.id, fandom.displayName);
+          if (!cancelled && id) setPhotoId(id);
+        } catch {
+          /* non-critical — sharing still works locally */
+        }
+      }
+
       const t1 = setTimeout(() => {
         if (!cancelled) {
           setCardRevealed(true);
@@ -152,6 +173,40 @@ export default function ResultScreen({
     if (!canvasRef.current || compositing) return;
     saveImage(canvasRef.current);
     setShareHint(i.photoSaved);
+  };
+
+  const handleSocialShare = async (
+    platform: 'instagram' | 'tiktok' | 'whatsapp' | 'twitter'
+  ) => {
+    if (!canvasRef.current || compositing) return;
+
+    let result: ShareResult = 'error';
+    switch (platform) {
+      case 'instagram':
+        result = await shareToInstagram(canvasRef.current, shareText);
+        if (result === 'copied' || result === 'saved') trackShare(fandom.id);
+        setShareHint(result === 'copied' ? i.instagramHint : i.savedGallery);
+        break;
+      case 'tiktok':
+        result = await shareToTikTok(canvasRef.current, shareText);
+        if (result === 'copied' || result === 'saved') trackShare(fandom.id);
+        setShareHint(result === 'copied' ? i.tiktokHint : i.savedGallery);
+        break;
+      case 'whatsapp':
+        result = await shareToWhatsApp(canvasRef.current, shareText);
+        if (result === 'opened') {
+          trackShare(fandom.id);
+          setShareHint(i.whatsappHint);
+        }
+        break;
+      case 'twitter':
+        result = await shareToTwitter(canvasRef.current, shareText);
+        if (result === 'opened') {
+          trackShare(fandom.id);
+          setShareHint(i.twitterHint);
+        }
+        break;
+    }
   };
 
   const disabledStyle = compositing ? { opacity: 0.4, pointerEvents: 'none' as const } : {};
@@ -227,6 +282,41 @@ export default function ResultScreen({
           {i.share}
         </button>
 
+        <div className="social-share-row w-full" style={disabledStyle}>
+          <button
+            type="button"
+            onClick={() => handleSocialShare('instagram')}
+            disabled={compositing}
+            className="social-share-btn social-share-instagram"
+            aria-label={i.shareInstagram}>
+            {i.shareInstagram}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSocialShare('whatsapp')}
+            disabled={compositing}
+            className="social-share-btn social-share-whatsapp"
+            aria-label={i.shareWhatsApp}>
+            {i.shareWhatsApp}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSocialShare('twitter')}
+            disabled={compositing}
+            className="social-share-btn social-share-twitter"
+            aria-label={i.shareTwitter}>
+            {i.shareTwitter}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSocialShare('tiktok')}
+            disabled={compositing}
+            className="social-share-btn social-share-tiktok"
+            aria-label={i.shareTikTok}>
+            {i.shareTikTok}
+          </button>
+        </div>
+
         <div className="flex w-full gap-2 sm:gap-3">
           <button
             onClick={handleSave}
@@ -263,7 +353,12 @@ export default function ResultScreen({
         {/* Email capture */}
         {showPrideBanner && (
           <div className="pride-banner w-full flex justify-center">
-            <EmailCapture fandomId={fandom.id} fandomName={fandom.displayName} lang={lang} />
+            <EmailCapture
+              fandomId={fandom.id}
+              fandomName={fandom.displayName}
+              lang={lang}
+              photoId={photoId}
+            />
           </div>
         )}
 

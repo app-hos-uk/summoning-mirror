@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import nodemailer from 'nodemailer';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,8 +23,10 @@ const FANDOMS_DIR = IS_PROD && fs.existsSync(path.join(DIST_DIR, 'fandoms'))
   ? path.join(DIST_DIR, 'fandoms')
   : path.join(__dirname, '..', 'public', 'fandoms');
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const CARDS_DIR = path.join(UPLOADS_DIR, 'cards');
+const PHOTOS_PATH = path.join(DATA_DIR, 'photos.json');
 
-for (const dir of [UPLOADS_DIR, DATA_DIR]) {
+for (const dir of [UPLOADS_DIR, CARDS_DIR, DATA_DIR]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -70,6 +73,15 @@ interface EmailEntry {
   timestamp: string;
 }
 
+interface PhotoEntry {
+  id: string;
+  filename: string;
+  fandomId: string;
+  fandomName: string;
+  email?: string;
+  createdAt: string;
+}
+
 // --- Config helpers ---
 
 function readConfig(): Config {
@@ -107,6 +119,100 @@ function readEmails(): EmailEntry[] {
 
 function writeEmails(emails: EmailEntry[]): void {
   fs.writeFileSync(EMAILS_PATH, JSON.stringify(emails, null, 2), 'utf-8');
+}
+
+// --- Photo storage helpers ---
+
+function readPhotos(): PhotoEntry[] {
+  try {
+    if (fs.existsSync(PHOTOS_PATH)) {
+      return JSON.parse(fs.readFileSync(PHOTOS_PATH, 'utf-8'));
+    }
+  } catch { /* start fresh */ }
+  return [];
+}
+
+function writePhotos(photos: PhotoEntry[]): void {
+  fs.writeFileSync(PHOTOS_PATH, JSON.stringify(photos, null, 2), 'utf-8');
+}
+
+function getPhotoById(id: string): PhotoEntry | undefined {
+  return readPhotos().find((p) => p.id === id);
+}
+
+function getPhotoFilePath(photo: PhotoEntry): string {
+  return path.join(CARDS_DIR, photo.filename);
+}
+
+// --- Email transport (configure via env vars) ---
+
+const smtpTransport = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  secure: false,
+  auth: process.env.SMTP_USER && process.env.SMTP_PASS
+    ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    : undefined,
+});
+
+const SMTP_FROM = process.env.SMTP_FROM || 'House of Spells NYC';
+const SMTP_USER = process.env.SMTP_USER || '';
+const SOCIAL_HANDLE = '@houseofspellsnyc';
+const FOUNDER_URL = 'https://houseofspells.com/register';
+const VISIT_URL = 'https://houseofspells.com/nyc';
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildPhotoEmailHtml(firstName: string, fandomName: string): string {
+  const safeName = escapeHtml(firstName);
+  const safeFandom = escapeHtml(fandomName);
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0C1428;font-family:Georgia,serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#0C1428;">
+    <tr>
+      <td style="padding:32px 24px;text-align:center;">
+        <h1 style="color:#C5A55A;font-size:22px;letter-spacing:0.15em;margin:0 0 8px;">THE SUMMONING MIRROR</h1>
+        <p style="color:rgba(197,165,90,0.6);font-size:13px;letter-spacing:0.1em;margin:0;">House of Spells NYC</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0 24px;text-align:center;">
+        <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Hey ${safeName}!</p>
+        <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.85);margin:0 0 24px;">
+          Here's your <strong style="color:#C5A55A;">${safeFandom}</strong> fan card from the Summoning Mirror.
+          Share it and tag us!
+        </p>
+        <img src="cid:summoning-card" alt="Your Summoning Mirror Card" style="max-width:100%;border:2px solid rgba(197,165,90,0.3);border-radius:4px;" />
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:32px 24px;text-align:center;">
+        <p style="font-size:14px;color:#C5A55A;margin:0 0 8px;">Instagram &amp; TikTok: ${SOCIAL_HANDLE}</p>
+        <p style="font-size:13px;color:rgba(197,165,90,0.7);margin:0 0 24px;">
+          #CurateYourUniverse #HouseOfSpellsNYC #SummoningMirror
+        </p>
+        <a href="${FOUNDER_URL}" style="display:inline-block;padding:12px 28px;border:2px solid #C5A55A;color:#C5A55A;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:0.12em;margin-bottom:12px;">
+          BECOME A FOUNDING MEMBER
+        </a>
+        <br />
+        <a href="${VISIT_URL}" style="color:rgba(197,165,90,0.6);font-size:12px;text-decoration:none;">
+          Visit us at houseofspells.com/nyc
+        </a>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 // --- Admin Auth ---
@@ -301,6 +407,181 @@ app.post('/api/email/collect', (req, res) => {
   writeAnalytics(analytics);
 
   res.json({ success: true });
+});
+
+// --- Rate limiting (in-memory, kiosk-scale) ---
+
+const uploadRateMap = new Map<string, { count: number; resetAt: number }>();
+const emailRateMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(
+  map: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  max: number,
+  windowMs: number
+): boolean {
+  const now = Date.now();
+  const entry = map.get(key);
+  if (!entry || now > entry.resetAt) {
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= max) return false;
+  entry.count++;
+  return true;
+}
+
+function clientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.socket.remoteAddress || 'unknown';
+}
+
+// --- PHOTO STORAGE ---
+
+const cardStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, CARDS_DIR),
+  filename: (_req, _file, cb) => {
+    cb(null, `${crypto.randomUUID()}.jpg`);
+  },
+});
+
+const cardUpload = multer({
+  storage: cardStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype === 'image/jpeg');
+  },
+});
+
+app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
+  const ip = clientIp(req);
+  if (!checkRateLimit(uploadRateMap, ip, 60, 60 * 60 * 1000)) {
+    if (req.file) fs.unlinkSync(req.file.path);
+    return res.status(429).json({ error: 'Upload rate limit exceeded' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'JPEG image required' });
+  }
+
+  const { fandomId, fandomName } = req.body;
+  if (!fandomId || !fandomName) {
+    fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'fandomId and fandomName required' });
+  }
+
+  const id = path.basename(req.file.filename, '.jpg');
+  const entry: PhotoEntry = {
+    id,
+    filename: req.file.filename,
+    fandomId,
+    fandomName,
+    createdAt: new Date().toISOString(),
+  };
+
+  const photos = readPhotos();
+  photos.push(entry);
+
+  // Keep last 5000 photos metadata
+  if (photos.length > 5000) {
+    const removed = photos.splice(0, photos.length - 5000);
+    for (const old of removed) {
+      const oldPath = getPhotoFilePath(old);
+      try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch { /* ignore */ }
+    }
+  }
+
+  writePhotos(photos);
+
+  res.status(201).json({
+    id: entry.id,
+    url: `/api/photos/${entry.id}/image`,
+  });
+});
+
+app.get('/api/photos/:id/image', (req, res) => {
+  const photo = getPhotoById(req.params.id);
+  if (!photo) {
+    return res.status(404).json({ error: 'Photo not found' });
+  }
+
+  const filePath = getPhotoFilePath(photo);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Image file missing' });
+  }
+
+  res.setHeader('Content-Type', 'image/jpeg');
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.sendFile(filePath);
+});
+
+app.post('/api/photos/:id/email', async (req, res) => {
+  const ip = clientIp(req);
+  if (!checkRateLimit(emailRateMap, ip, 10, 60 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Email rate limit exceeded' });
+  }
+
+  const { email, firstName, fandomName } = req.body;
+
+  if (!email || !EMAIL_REGEX.test(email)) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+  if (!firstName?.trim()) {
+    return res.status(400).json({ error: 'firstName required' });
+  }
+
+  if (!SMTP_USER || !process.env.SMTP_PASS) {
+    return res.status(503).json({ error: 'Email service not configured' });
+  }
+
+  const photo = getPhotoById(req.params.id);
+  if (!photo) {
+    return res.status(404).json({ error: 'Photo not found' });
+  }
+
+  if (photo.email) {
+    return res.status(409).json({ error: 'Card already emailed for this photo' });
+  }
+
+  const ageMs = Date.now() - new Date(photo.createdAt).getTime();
+  if (ageMs > 30 * 60 * 1000) {
+    return res.status(410).json({ error: 'Photo session expired' });
+  }
+
+  const filePath = getPhotoFilePath(photo);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Image file missing' });
+  }
+
+  const displayFandom = fandomName || photo.fandomName;
+  const safeName = firstName.trim();
+
+  try {
+    await smtpTransport.sendMail({
+      from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+      to: email,
+      subject: 'Your Summoning Mirror Card — House of Spells NYC',
+      html: buildPhotoEmailHtml(safeName, displayFandom),
+      attachments: [{
+        filename: 'SummoningMirror_HouseOfSpells.jpg',
+        path: filePath,
+        cid: 'summoning-card',
+      }],
+    });
+
+    const photos = readPhotos();
+    const idx = photos.findIndex((p) => p.id === photo.id);
+    if (idx !== -1) {
+      photos[idx].email = email;
+      writePhotos(photos);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Email] Failed to send photo card:', err);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
 });
 
 // --- ADMIN ANALYTICS ---
@@ -507,6 +788,8 @@ app.listen(PORT, () => {
   console.log(`  Fandoms config: ${CONFIG_PATH}`);
   console.log(`  Analytics: ${ANALYTICS_PATH}`);
   console.log(`  Emails: ${EMAILS_PATH}`);
+  console.log(`  Photos: ${PHOTOS_PATH}`);
+  console.log(`  Card images: ${CARDS_DIR}`);
   console.log(`  Fandom images: ${FANDOMS_DIR}\n`);
 });
 
