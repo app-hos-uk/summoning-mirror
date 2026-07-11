@@ -74,17 +74,11 @@ function MidnightFoil({ selfieUrl, fandomArtUrl, fandomName, serial, stampedAt, 
       color: '#eae6dc',
     }}>
       <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 4px 14px' }}>
+        {/* Header — Logo + Wordogram horizontal */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 4px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: '50%', border: '1px solid #d4a94a',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#d4a94a', font: "700 11px/1 'Cinzel', serif",
-            }}>H</div>
-            <div style={{ font: "500 10px/1 'JetBrains Mono', monospace", letterSpacing: '0.22em', color: '#d4a94a' }}>
-              HOUSE OF SPELLS
-            </div>
+            <img src="/branding/emblem.png" alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+            <img src="/branding/wordogram.png" alt="House of Spells" style={{ height: 18, objectFit: 'contain' }} />
           </div>
           <div style={{ font: "600 10px/1 'JetBrains Mono', monospace", letterSpacing: '0.2em', color: '#8a8578' }}>
             NYC · MMXXVI
@@ -129,39 +123,48 @@ function MidnightFoil({ selfieUrl, fandomArtUrl, fandomName, serial, stampedAt, 
         {/* Body */}
         <div style={{
           flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', textAlign: 'center', padding: '20px 12px 4px',
+          justifyContent: 'center', textAlign: 'center', padding: '14px 12px 4px',
         }}>
           <div style={{
-            font: "500 9px/1 'JetBrains Mono', monospace", letterSpacing: '0.32em', color: '#8a8578', marginBottom: 12,
+            font: "500 9px/1 'JetBrains Mono', monospace", letterSpacing: '0.32em', color: '#8a8578', marginBottom: 10,
           }}>— CERTIFIED FAN OF —</div>
           <div style={{
             font: "700 42px/1 'Cinzel', serif", letterSpacing: '0.04em', color: '#d4a94a',
             textShadow: '0 0 30px rgba(212,169,74,0.25)',
           }}>{fandomName.toUpperCase()}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, color: '#d4a94a', opacity: 0.7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, color: '#d4a94a', opacity: 0.7 }}>
             <div style={{ width: 60, height: 1, background: '#d4a94a' }} />
             <div style={{ width: 6, height: 6, transform: 'rotate(45deg)', background: '#d4a94a' }} />
             <div style={{ width: 60, height: 1, background: '#d4a94a' }} />
           </div>
           <div style={{
-            marginTop: 12,
-            font: "400 12px/1.5 'Cormorant Garamond', serif", fontStyle: 'italic',
+            marginTop: 10,
+            font: "400 11px/1.5 'Cormorant Garamond', serif", fontStyle: 'italic',
             color: '#b8b09a', maxWidth: 360,
           }}>
             Curated at Times Square during Fan Curation Days, opening week of the New York flagship.
           </div>
+          {/* Wordogram in body */}
+          <img src="/branding/wordogram.png" alt="" style={{
+            marginTop: 14, width: 200, objectFit: 'contain', opacity: 0.7,
+          }} />
         </div>
 
-        {/* Footer */}
+        {/* Footer — Logo + location + serial */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-          borderTop: '1px solid rgba(212,169,74,0.2)', paddingTop: 12, marginTop: 'auto',
+          borderTop: '1px solid rgba(212,169,74,0.2)', paddingTop: 10, marginTop: 'auto',
         }}>
-          <div>
-            <div style={{ font: "700 15px/1 'Cinzel', serif", color: '#eae6dc' }}>House of Spells</div>
-            <div style={{
-              font: "500 8px/1 'JetBrains Mono', monospace", letterSpacing: '0.24em', color: '#8a8578', marginTop: 5,
-            }}>CURATE YOUR UNIVERSE</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/branding/emblem-circle.png" alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+            <div>
+              <div style={{
+                font: "500 8px/1 'JetBrains Mono', monospace", letterSpacing: '0.2em', color: '#8a8578',
+              }}>CURATE YOUR UNIVERSE</div>
+              <div style={{
+                font: "400 8px/1 'JetBrains Mono', monospace", letterSpacing: '0.12em', color: '#6c6858', marginTop: 4,
+              }}>Times Square, New York</div>
+            </div>
           </div>
           <div style={{
             textAlign: 'right', font: "400 9px/1.5 'JetBrains Mono', monospace", color: '#6c6858',
@@ -196,21 +199,14 @@ function HoloPassport({ selfieUrl, fandomArtUrl, fandomName, serial, chapter = '
           background: 'radial-gradient(140% 60% at 100% 0%, rgba(46,207,214,0.12), transparent 45%), radial-gradient(120% 60% at 0% 100%, rgba(122,92,255,0.14), transparent 45%)',
         }} />
 
-        {/* Header */}
+        {/* Header — Logo + Wordogram horizontal */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              width: 26, height: 26, borderRadius: 7,
-              background: 'conic-gradient(from 0deg, #d4a94a, #2ecfd6, #7a5cff, #d4a94a)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#0b0d12', font: "800 12px/1 'Space Grotesk', sans-serif",
-            }}>H</div>
+            <img src="/branding/emblem.png" alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
             <div>
-              <div style={{ font: "700 11px/1 'Space Grotesk', sans-serif", letterSpacing: '0.02em', color: '#eae6dc' }}>
-                HOUSE OF SPELLS
-              </div>
+              <img src="/branding/wordogram.png" alt="House of Spells" style={{ height: 16, objectFit: 'contain', display: 'block' }} />
               <div style={{
-                font: "500 7px/1 'JetBrains Mono', monospace", letterSpacing: '0.22em', color: '#7a8095', marginTop: 3,
+                font: "500 7px/1 'JetBrains Mono', monospace", letterSpacing: '0.22em', color: '#7a8095', marginTop: 4,
               }}>FAN PASSPORT · 2026</div>
             </div>
           </div>
@@ -257,10 +253,24 @@ function HoloPassport({ selfieUrl, fandomArtUrl, fandomName, serial, chapter = '
             font: "500 8px/1 'JetBrains Mono', monospace", letterSpacing: '0.32em', color: '#7a8095',
           }}>— FANDOM —</div>
           <div style={{
-            font: "800 42px/1 'Space Grotesk', sans-serif", letterSpacing: '-0.02em', marginTop: 10,
+            font: "800 36px/1 'Space Grotesk', sans-serif", letterSpacing: '-0.02em', marginTop: 8,
             background: 'linear-gradient(90deg, #d4a94a, #2ecfd6, #7a5cff, #d4a94a)',
             WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
           }}>{fandomName.toUpperCase()}</div>
+        </div>
+
+        {/* Branding — Wordogram on top, logo below */}
+        <div style={{
+          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', position: 'relative', padding: '4px 0',
+          minHeight: 80,
+        }}>
+          <img src="/branding/wordogram.png" alt="" style={{
+            width: 220, objectFit: 'contain', opacity: 0.55,
+          }} />
+          <img src="/branding/emblem-circle.png" alt="" style={{
+            width: 50, height: 50, objectFit: 'contain', opacity: 0.55, marginTop: 8,
+          }} />
         </div>
 
         {/* Data grid */}
