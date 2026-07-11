@@ -6,6 +6,7 @@ import CameraScreen from './screens/CameraScreen';
 import ResultScreen from './screens/ResultScreen';
 import AdminPanel from './admin/AdminPanel';
 import AnalyticsDashboard from './admin/AnalyticsDashboard';
+import PassportPage from './screens/PassportPage';
 import AdminLogin from './admin/AdminLogin';
 import { BRAND } from './utils/branding';
 import { getAdminToken, clearAdminToken, adminHeaders } from './utils/adminAuth';
@@ -14,6 +15,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
   const [selectedFandom, setSelectedFandom] = useState<Fandom | null>(null);
   const [wishText, setWishText] = useState('');
+  const [guestName, setGuestName] = useState('');
   const [capturedSnapshot, setCapturedSnapshot] = useState<HTMLCanvasElement | null>(null);
   const [lang, setLang] = useState<Lang>('en');
   const [captureMode, setCaptureMode] = useState<CaptureMode>('solo');
@@ -23,7 +25,8 @@ export default function App() {
   const [adminAuthed, setAdminAuthed] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
-  const pathname = window.location.pathname;
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+  const isPassport = pathname.startsWith('/card/');
   const isAdmin = pathname === '/admin';
   const isAnalytics = pathname === '/admin/analytics';
   const needsAuth = isAdmin || isAnalytics;
@@ -40,8 +43,14 @@ export default function App() {
     }
     fetch('/api/admin/session', { headers: adminHeaders() })
       .then((r) => r.json())
-      .then((d) => { if (d.valid) setAdminAuthed(true); })
-      .catch(() => {})
+      .then((d) => {
+        if (!d.valid) {
+          clearAdminToken();
+        } else {
+          setAdminAuthed(true);
+        }
+      })
+      .catch(() => { clearAdminToken(); })
       .finally(() => setAuthChecked(true));
   }, [needsAuth]);
 
@@ -73,6 +82,7 @@ export default function App() {
     setCapturedSnapshot(null);
     setSelectedFandom(null);
     setWishText('');
+    setGuestName('');
     setCaptureMode('solo');
     setScreen('welcome');
   }, []);
@@ -100,6 +110,10 @@ export default function App() {
     return <AdminPanel onLogout={handleAdminLogout} />;
   }
 
+  if (isPassport) {
+    return <PassportPage />;
+  }
+
   return (
     <div className="h-full w-full overflow-hidden relative"
       style={{ fontFamily: 'Georgia, serif' }}>
@@ -119,6 +133,8 @@ export default function App() {
             onSelectFandom={setSelectedFandom}
             wishText={wishText}
             onWishChange={setWishText}
+            guestName={guestName}
+            onGuestNameChange={setGuestName}
             onCapture={handleCapture}
             onBack={handleReset}
             lang={lang}
@@ -143,6 +159,8 @@ export default function App() {
           photoSnapshot={capturedSnapshot}
           fandom={selectedFandom}
           wishText={wishText}
+          guestName={guestName}
+          fandoms={fandoms}
           onNewPhoto={handleNewPhoto}
           onReset={handleReset}
           lang={lang}

@@ -70,6 +70,10 @@ interface AnalyticsData {
 interface EmailEntry {
   email: string;
   fandomId: string;
+  firstName?: string;
+  photoId?: string;
+  wishText?: string;
+  preferredFandom?: string;
   timestamp: string;
 }
 
@@ -78,7 +82,19 @@ interface PhotoEntry {
   filename: string;
   fandomId: string;
   fandomName: string;
+  guestName?: string;
+  wishText?: string;
+  captureMode?: string;
+  serialNumber: string;
+  visitOrdinal: number;
+  fandomOrdinal: number;
+  ugcCode: string;
+  statusTier: string;
   email?: string;
+  firstName?: string;
+  preferredFandom?: string;
+  lifecycleDaysSent?: number[];
+  passportViews?: number;
   createdAt: string;
 }
 
@@ -160,6 +176,29 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SOCIAL_HANDLE = '@houseofspellsnyc';
 const FOUNDER_URL = 'https://houseofspells.com/register';
 const VISIT_URL = 'https://houseofspells.com/nyc';
+const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
+
+type StatusTier = 'pioneer' | 'summoner' | 'archivist';
+
+function getStatusTier(visitOrdinal: number): StatusTier {
+  if (visitOrdinal <= 100) return 'pioneer';
+  if (visitOrdinal <= 500) return 'summoner';
+  return 'archivist';
+}
+
+function formatSerialNumber(ordinal: number): string {
+  return `HOS-NYC-${String(ordinal).padStart(5, '0')}`;
+}
+
+function generateUgcCode(ordinal: number): string {
+  const base = ordinal.toString(36).toUpperCase().padStart(4, '0');
+  const rand = crypto.randomBytes(2).toString('hex').toUpperCase();
+  return `HOS-${base}${rand}`;
+}
+
+function getPassportUrl(photoId: string): string {
+  return `${BASE_URL}/card/${photoId}`;
+}
 
 function escapeHtml(str: string): string {
   return str
@@ -170,9 +209,19 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function buildPhotoEmailHtml(firstName: string, fandomName: string): string {
+function buildPhotoEmailHtml(
+  firstName: string,
+  fandomName: string,
+  passportUrl: string,
+  ugcCode: string,
+  statusTier: string
+): string {
   const safeName = escapeHtml(firstName);
   const safeFandom = escapeHtml(fandomName);
+  const safeUrl = escapeHtml(passportUrl);
+  const safeCode = escapeHtml(ugcCode);
+  const tierLabel = statusTier === 'pioneer' ? 'Pioneer Fan'
+    : statusTier === 'summoner' ? 'Summoner' : 'Archivist';
   return `
 <!DOCTYPE html>
 <html>
@@ -190,9 +239,18 @@ function buildPhotoEmailHtml(firstName: string, fandomName: string): string {
         <p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Hey ${safeName}!</p>
         <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.85);margin:0 0 24px;">
           Here's your <strong style="color:#C5A55A;">${safeFandom}</strong> fan card from the Summoning Mirror.
-          Share it and tag us!
+          You're a <strong style="color:#C5A55A;">${tierLabel}</strong>! Share it and tag us!
         </p>
         <img src="cid:summoning-card" alt="Your Summoning Mirror Card" style="max-width:100%;border:2px solid rgba(197,165,90,0.3);border-radius:4px;" />
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px 24px;text-align:center;">
+        <p style="font-size:13px;color:rgba(197,165,90,0.7);margin:0 0 8px;">Your Digital Passport</p>
+        <a href="${safeUrl}" style="color:#C5A55A;font-size:14px;text-decoration:none;letter-spacing:0.08em;">${safeUrl}</a>
+        <p style="font-size:13px;color:rgba(197,165,90,0.7);margin:16px 0 8px;">Share-to-Earn Code</p>
+        <p style="font-size:18px;color:#C5A55A;font-weight:bold;letter-spacing:0.15em;margin:0;">${safeCode}</p>
+        <p style="font-size:12px;color:rgba(197,165,90,0.5);margin:8px 0 0;">Tag ${SOCIAL_HANDLE} + #CurateYourUniverse to unlock perks</p>
       </td>
     </tr>
     <tr>
@@ -215,13 +273,68 @@ function buildPhotoEmailHtml(firstName: string, fandomName: string): string {
 </html>`;
 }
 
+function buildLifecycleEmailHtml(
+  firstName: string,
+  day: number,
+  fandomName: string,
+  passportUrl: string,
+  ugcCode: string
+): { subject: string; html: string } {
+  const safeName = escapeHtml(firstName);
+  const safeFandom = escapeHtml(fandomName);
+  const safeUrl = escapeHtml(passportUrl);
+  const safeCode = escapeHtml(ugcCode);
+
+  const messages: Record<number, { subject: string; body: string }> = {
+    1: {
+      subject: 'Your Summoning Mirror card is waiting ✨',
+      body: `Your <strong style="color:#C5A55A;">${safeFandom}</strong> fan card is ready to share! Post it, tag ${SOCIAL_HANDLE}, and show your code <strong style="color:#C5A55A;">${safeCode}</strong> in-store for perks.`,
+    },
+    3: {
+      subject: 'Collect all fandoms — 3 days since your visit',
+      body: `Hey ${safeName}, fans are collecting cards from every universe at House of Spells NYC. Come back to the Summoning Mirror and add another fandom to your passport!`,
+    },
+    7: {
+      subject: 'Become a Founding Member — exclusive NYC access',
+      body: `One week since you curated your universe! Founding Members get early access to Fan Curation Days events. Your passport is always at <a href="${safeUrl}" style="color:#C5A55A;">${safeUrl}</a>.`,
+    },
+    30: {
+      subject: 'Fan Curation Days recap — your universe awaits',
+      body: `A month ago you summoned your ${safeFandom} card at Times Square. Revisit House of Spells NYC and curate a new universe. Share with #CurateYourUniverse!`,
+    },
+  };
+
+  const msg = messages[day] || messages[1];
+  return {
+    subject: msg.subject,
+    html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0C1428;font-family:Georgia,serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#0C1428;">
+    <tr><td style="padding:32px 24px;text-align:center;">
+      <h1 style="color:#C5A55A;font-size:20px;letter-spacing:0.12em;margin:0;">THE SUMMONING MIRROR</h1>
+    </td></tr>
+    <tr><td style="padding:0 24px 32px;text-align:center;">
+      <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.85);">${msg.body}</p>
+      <a href="${safeUrl}" style="display:inline-block;margin-top:16px;padding:12px 28px;border:2px solid #C5A55A;color:#C5A55A;text-decoration:none;font-size:13px;font-weight:bold;letter-spacing:0.12em;">VIEW YOUR PASSPORT</a>
+      <br /><a href="${FOUNDER_URL}" style="display:inline-block;margin-top:12px;color:rgba(197,165,90,0.6);font-size:12px;text-decoration:none;">Become a Founding Member</a>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  };
+}
+
 // --- Admin Auth ---
 
-const ADMIN_EMAIL = 'admin@houseofspells.com';
-const ADMIN_PASSWORD = 'Admin@1234';
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@houseofspells.com').toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PROD ? '' : 'Admin@1234');
 
 const activeSessions = new Map<string, { expiresAt: number }>();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+const loginRateMap = new Map<string, { count: number; resetAt: number }>();
 
 function createSession(): string {
   const token = crypto.randomBytes(32).toString('hex');
@@ -251,6 +364,15 @@ function requireAdmin(req: Request, res: Response, next: NextFunction): void {
 }
 
 app.post('/api/admin/login', (req, res) => {
+  const ip = clientIp(req);
+  if (!checkRateLimit(loginRateMap, ip, 5, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
+  }
+
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'Admin access not configured' });
+  }
+
   const { email, password } = req.body;
   if (
     email?.toLowerCase() === ADMIN_EMAIL &&
@@ -342,6 +464,17 @@ app.get('/api/analytics/counter', (_req, res) => {
   res.json({ totalCards: data.totalCards });
 });
 
+app.get('/api/analytics/fandom/:fandomId', (req, res) => {
+  const data = readAnalytics();
+  const fandomId = req.params.fandomId;
+  const info = data.fandomCounts[fandomId];
+  res.json({
+    fandomCount: info?.count || 0,
+    fandomName: info?.name || fandomId,
+    totalCards: data.totalCards,
+  });
+});
+
 app.post('/api/analytics/track', (req, res) => {
   const { event, fandomId, fandomName } = req.body;
   if (!event || !fandomId) {
@@ -383,7 +516,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_EMAILS = 50000;
 
 app.post('/api/email/collect', (req, res) => {
-  const { email, fandomId } = req.body;
+  const { email, fandomId, firstName, photoId, wishText, preferredFandom } = req.body;
   if (!email || !EMAIL_REGEX.test(email)) {
     return res.status(400).json({ error: 'Valid email required' });
   }
@@ -397,10 +530,24 @@ app.post('/api/email/collect', (req, res) => {
   emails.push({
     email,
     fandomId: fandomId || 'unknown',
+    firstName: firstName?.trim() || undefined,
+    photoId: photoId || undefined,
+    wishText: wishText?.trim() || undefined,
+    preferredFandom: preferredFandom || undefined,
     timestamp: new Date().toISOString(),
   });
 
   writeEmails(emails);
+
+  if (photoId) {
+    const photos = readPhotos();
+    const idx = photos.findIndex((p) => p.id === photoId);
+    if (idx !== -1) {
+      if (firstName?.trim()) photos[idx].firstName = firstName.trim();
+      if (preferredFandom) photos[idx].preferredFandom = preferredFandom;
+      writePhotos(photos);
+    }
+  }
 
   const analytics = readAnalytics();
   analytics.totalEmails = (analytics.totalEmails || 0) + 1;
@@ -441,8 +588,9 @@ function clientIp(req: Request): string {
 
 const cardStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, CARDS_DIR),
-  filename: (_req, _file, cb) => {
-    cb(null, `${crypto.randomUUID()}.jpg`);
+  filename: (req, _file, cb) => {
+    const id = (req.body?.photoId as string) || crypto.randomUUID();
+    cb(null, `${id}.jpg`);
   },
 });
 
@@ -452,6 +600,37 @@ const cardUpload = multer({
   fileFilter: (_req, file, cb) => {
     cb(null, file.mimetype === 'image/jpeg');
   },
+});
+
+app.post('/api/photos/reserve', (req, res) => {
+  const { fandomId, fandomName } = req.body;
+  if (!fandomId || !fandomName) {
+    return res.status(400).json({ error: 'fandomId and fandomName required' });
+  }
+
+  const analytics = readAnalytics();
+  const config = readConfig();
+  const visitOrdinal = analytics.totalCards + 1;
+  const fandomCount = analytics.fandomCounts[fandomId]?.count || 0;
+  const fandomOrdinal = fandomCount + 1;
+  const id = crypto.randomUUID();
+  const serialNumber = formatSerialNumber(visitOrdinal);
+  const ugcCode = generateUgcCode(visitOrdinal);
+  const statusTier = getStatusTier(visitOrdinal);
+  const totalFandoms = config.fandoms.filter((f) => f.enabled).length;
+
+  res.json({
+    id,
+    serialNumber,
+    visitOrdinal,
+    fandomOrdinal,
+    fandomTotal: fandomCount,
+    totalCards: analytics.totalCards,
+    totalFandoms,
+    statusTier,
+    ugcCode,
+    passportUrl: getPassportUrl(id),
+  });
 });
 
 app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
@@ -465,23 +644,44 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
     return res.status(400).json({ error: 'JPEG image required' });
   }
 
-  const { fandomId, fandomName } = req.body;
+  const {
+    fandomId, fandomName, photoId, guestName, wishText, captureMode,
+    serialNumber, visitOrdinal, fandomOrdinal, ugcCode, statusTier,
+  } = req.body;
+
   if (!fandomId || !fandomName) {
     fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: 'fandomId and fandomName required' });
   }
 
-  const id = path.basename(req.file.filename, '.jpg');
+  const id = photoId || path.basename(req.file.filename, '.jpg');
+  const ordinal = parseInt(visitOrdinal || '0', 10) || readAnalytics().totalCards + 1;
+
   const entry: PhotoEntry = {
     id,
     filename: req.file.filename,
     fandomId,
     fandomName,
+    guestName: guestName?.trim() || undefined,
+    wishText: wishText?.trim() || undefined,
+    captureMode: captureMode || 'solo',
+    serialNumber: serialNumber || formatSerialNumber(ordinal),
+    visitOrdinal: ordinal,
+    fandomOrdinal: parseInt(fandomOrdinal || '1', 10),
+    ugcCode: ugcCode || generateUgcCode(ordinal),
+    statusTier: statusTier || getStatusTier(ordinal),
+    lifecycleDaysSent: [],
+    passportViews: 0,
     createdAt: new Date().toISOString(),
   };
 
   const photos = readPhotos();
-  photos.push(entry);
+  const existingIdx = photos.findIndex((p) => p.id === id);
+  if (existingIdx !== -1) {
+    photos[existingIdx] = { ...photos[existingIdx], ...entry };
+  } else {
+    photos.push(entry);
+  }
 
   // Keep last 5000 photos metadata
   if (photos.length > 5000) {
@@ -497,6 +697,45 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
   res.status(201).json({
     id: entry.id,
     url: `/api/photos/${entry.id}/image`,
+    passportUrl: getPassportUrl(entry.id),
+    ugcCode: entry.ugcCode,
+    serialNumber: entry.serialNumber,
+  });
+});
+
+app.get('/api/photos/:id/passport', (req, res) => {
+  const photo = getPhotoById(req.params.id);
+  if (!photo) {
+    return res.status(404).json({ error: 'Photo not found' });
+  }
+
+  const analytics = readAnalytics();
+  const config = readConfig();
+  const fandomInfo = analytics.fandomCounts[photo.fandomId];
+
+  const photos = readPhotos();
+  const idx = photos.findIndex((p) => p.id === photo.id);
+  if (idx !== -1) {
+    photos[idx].passportViews = (photos[idx].passportViews || 0) + 1;
+    writePhotos(photos);
+  }
+
+  res.json({
+    id: photo.id,
+    serialNumber: photo.serialNumber || formatSerialNumber(photo.visitOrdinal || 1),
+    guestName: photo.guestName || photo.firstName || '',
+    fandomId: photo.fandomId,
+    fandomName: photo.fandomName,
+    wishText: photo.wishText || '',
+    visitOrdinal: photo.visitOrdinal || 1,
+    fandomOrdinal: photo.fandomOrdinal || 1,
+    fandomTotal: fandomInfo?.count || photo.fandomOrdinal || 1,
+    statusTier: photo.statusTier || getStatusTier(photo.visitOrdinal || 1),
+    ugcCode: photo.ugcCode || '',
+    createdAt: photo.createdAt,
+    imageUrl: `/api/photos/${photo.id}/image`,
+    passportUrl: getPassportUrl(photo.id),
+    totalFandoms: config.fandoms.filter((f) => f.enabled).length,
   });
 });
 
@@ -562,7 +801,13 @@ app.post('/api/photos/:id/email', async (req, res) => {
       from: `"${SMTP_FROM}" <${SMTP_USER}>`,
       to: email,
       subject: 'Your Summoning Mirror Card — House of Spells NYC',
-      html: buildPhotoEmailHtml(safeName, displayFandom),
+      html: buildPhotoEmailHtml(
+        safeName,
+        displayFandom,
+        getPassportUrl(photo.id),
+        photo.ugcCode || generateUgcCode(photo.visitOrdinal || 1),
+        photo.statusTier || getStatusTier(photo.visitOrdinal || 1)
+      ),
       attachments: [{
         filename: 'SummoningMirror_HouseOfSpells.jpg',
         path: filePath,
@@ -574,6 +819,8 @@ app.post('/api/photos/:id/email', async (req, res) => {
     const idx = photos.findIndex((p) => p.id === photo.id);
     if (idx !== -1) {
       photos[idx].email = email;
+      photos[idx].firstName = safeName;
+      photos[idx].lifecycleDaysSent = [0];
       writePhotos(photos);
     }
 
@@ -584,9 +831,35 @@ app.post('/api/photos/:id/email', async (req, res) => {
   }
 });
 
-// --- ADMIN ANALYTICS ---
+// --- ADMIN API (all routes below require valid session) ---
 
-app.get('/api/admin/analytics', requireAdmin, (_req, res) => {
+const fandomImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, FANDOMS_DIR),
+  filename: (req, _file, cb) => {
+    const config = readConfig();
+    const fandom = config.fandoms.find((f) => f.id === req.params.id);
+    if (fandom) {
+      const ext = path.extname(_file.originalname) || '.jpg';
+      cb(null, `${fandom.id}${ext}`);
+    } else {
+      cb(new Error('Fandom not found'), '');
+    }
+  },
+});
+
+const fandomImageUpload = multer({
+  storage: fandomImageStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
+
+const adminRouter = express.Router();
+adminRouter.use(requireAdmin);
+
+adminRouter.get('/analytics', (_req, res) => {
   const data = readAnalytics();
   const emails = readEmails();
 
@@ -620,15 +893,13 @@ app.get('/api/admin/analytics', requireAdmin, (_req, res) => {
   });
 });
 
-// --- ADMIN FANDOM API ---
-
-app.get('/api/admin/fandoms', requireAdmin, (_req, res) => {
+adminRouter.get('/fandoms', (_req, res) => {
   const config = readConfig();
   const sorted = config.fandoms.sort((a, b) => a.sortOrder - b.sortOrder);
   res.json(sorted);
 });
 
-app.post('/api/admin/fandoms', requireAdmin, (req, res) => {
+adminRouter.post('/fandoms', (req, res) => {
   const config = readConfig();
   const { displayName, accentColor, sortOrder, enabled } = req.body;
 
@@ -663,7 +934,7 @@ app.post('/api/admin/fandoms', requireAdmin, (req, res) => {
   res.status(201).json(newFandom);
 });
 
-app.put('/api/admin/fandoms/:id', requireAdmin, (req, res) => {
+adminRouter.put('/fandoms/:id', (req, res) => {
   const config = readConfig();
   const idx = config.fandoms.findIndex((f) => f.id === req.params.id);
 
@@ -709,7 +980,7 @@ app.put('/api/admin/fandoms/:id', requireAdmin, (req, res) => {
   res.json(fandom);
 });
 
-app.delete('/api/admin/fandoms/:id', requireAdmin, (req, res) => {
+adminRouter.delete('/fandoms/:id', (req, res) => {
   if (LOCKED_IDS.includes(req.params.id)) {
     return res.status(403).json({ error: 'Cannot delete brand-hierarchy locked fandom' });
   }
@@ -726,30 +997,7 @@ app.delete('/api/admin/fandoms/:id', requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, FANDOMS_DIR),
-  filename: (req, _file, cb) => {
-    const config = readConfig();
-    const fandom = config.fandoms.find((f) => f.id === req.params.id);
-    if (fandom) {
-      const ext = path.extname(_file.originalname) || '.jpg';
-      cb(null, `${fandom.id}${ext}`);
-    } else {
-      cb(new Error('Fandom not found'), '');
-    }
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    cb(null, allowed.includes(file.mimetype));
-  },
-});
-
-app.post('/api/admin/fandoms/:id/image', requireAdmin, upload.single('image'), (req, res) => {
+adminRouter.post('/fandoms/:id/image', fandomImageUpload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No image file provided' });
   }
@@ -765,6 +1013,8 @@ app.post('/api/admin/fandoms/:id/image', requireAdmin, upload.single('image'), (
 
   res.json({ success: true, filename: req.file.filename });
 });
+
+app.use('/api/admin', adminRouter);
 
 // In production, serve the Vite build output
 if (IS_PROD && fs.existsSync(DIST_DIR)) {
@@ -790,8 +1040,66 @@ app.listen(PORT, () => {
   console.log(`  Emails: ${EMAILS_PATH}`);
   console.log(`  Photos: ${PHOTOS_PATH}`);
   console.log(`  Card images: ${CARDS_DIR}`);
-  console.log(`  Fandom images: ${FANDOMS_DIR}\n`);
+  console.log(`  Fandom images: ${FANDOMS_DIR}`);
+  console.log(`  Base URL: ${BASE_URL}\n`);
 });
+
+// --- Email lifecycle scheduler (day 1, 3, 7, 30 follow-ups) ---
+
+const LIFECYCLE_DAYS = [1, 3, 7, 30];
+const LIFECYCLE_CHECK_MS = 30 * 60 * 1000;
+
+async function processLifecycleEmails(): Promise<void> {
+  if (!SMTP_USER || !process.env.SMTP_PASS) return;
+
+  const photos = readPhotos();
+  const now = Date.now();
+  let changed = false;
+
+  for (const photo of photos) {
+    if (!photo.email || !photo.firstName) continue;
+
+    const ageDays = (now - new Date(photo.createdAt).getTime()) / (24 * 60 * 60 * 1000);
+    const sent = photo.lifecycleDaysSent || [0];
+    let photoChanged = false;
+
+    for (const day of LIFECYCLE_DAYS) {
+      if (ageDays >= day && !sent.includes(day)) {
+        const { subject, html } = buildLifecycleEmailHtml(
+          photo.firstName,
+          day,
+          photo.fandomName,
+          getPassportUrl(photo.id),
+          photo.ugcCode || ''
+        );
+        try {
+          await smtpTransport.sendMail({
+            from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+            to: photo.email,
+            subject,
+            html,
+          });
+          sent.push(day);
+          photoChanged = true;
+        } catch (err) {
+          console.error(`[Lifecycle] Failed day-${day} email for ${photo.id}:`, err);
+        }
+      }
+    }
+
+    if (photoChanged) {
+      const idx = photos.findIndex((p) => p.id === photo.id);
+      if (idx !== -1) photos[idx].lifecycleDaysSent = sent;
+      changed = true;
+    }
+  }
+
+  if (changed) writePhotos(photos);
+}
+
+setInterval(() => {
+  processLifecycleEmails().catch((err) => console.error('[Lifecycle] Error:', err));
+}, LIFECYCLE_CHECK_MS);
 
 process.on('SIGTERM', () => {
   configWatcher?.close();

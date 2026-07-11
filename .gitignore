@@ -1,0 +1,12 @@
+# Spec / design documents (store outside git — e.g. Google Drive, Notion)
+*.docx
+*.doc
+HOS_Summoning_Mirror_*.html
+
+# OS
+.DS_Store
+
+# Env secrets
+.env
+.env.local
+.env.*

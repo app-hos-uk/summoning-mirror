@@ -14,6 +14,8 @@ interface Props {
   fandomsLoading: boolean;
   selectedFandom: Fandom | null;
   onSelectFandom: (f: Fandom) => void;
+  guestName: string;
+  onGuestNameChange: (text: string) => void;
   wishText: string;
   onWishChange: (text: string) => void;
   onCapture: (snapshot: HTMLCanvasElement) => void;
@@ -28,6 +30,8 @@ export default function CameraScreen({
   fandomsLoading,
   selectedFandom,
   onSelectFandom,
+  guestName,
+  onGuestNameChange,
   wishText,
   onWishChange,
   onCapture,
@@ -149,6 +153,15 @@ export default function CameraScreen({
         <div className="absolute inset-0 pointer-events-none border-2"
           style={{ borderColor: 'rgba(197,165,90,0.3)' }} />
 
+        {/* Face-safe framing guide */}
+        <div className="face-guide-overlay absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div className="face-guide-oval" />
+        </div>
+        <p className="face-guide-label absolute bottom-14 left-1/2 -translate-x-1/2 text-[9px] sm:text-[10px] tracking-wider pointer-events-none"
+          style={{ color: 'rgba(197,165,90,0.4)' }}>
+          {i.faceGuide}
+        </p>
+
         <img
           src={BRAND.assets.emblem}
           alt=""
@@ -222,27 +235,44 @@ export default function CameraScreen({
           />
         </div>
 
-        <div className="mt-2 sm:mt-3 md:mt-4 flex items-center gap-2 sm:gap-3 flex-shrink-0">
+        <div className="mt-2 sm:mt-3 md:mt-4 flex flex-col gap-2 flex-shrink-0">
           <input
             type="text"
-            value={wishText}
-            onChange={(e) => onWishChange(e.target.value.slice(0, 60))}
-            placeholder={i.wishPlaceholder}
-            maxLength={60}
-            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 md:py-4 text-xs sm:text-sm md:text-base rounded border outline-none transition-colors min-w-0"
+            value={guestName}
+            onChange={(e) => onGuestNameChange(e.target.value.slice(0, 30))}
+            placeholder={i.namePlaceholder}
+            maxLength={30}
+            className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm rounded border outline-none transition-colors"
             style={{
               backgroundColor: 'rgba(197,165,90,0.05)',
               borderColor: 'rgba(197,165,90,0.2)',
               color: 'white',
-              fontStyle: 'italic',
             }}
             onFocus={(e) => { e.target.style.borderColor = 'rgba(197,165,90,0.5)'; }}
             onBlur={(e) => { e.target.style.borderColor = 'rgba(197,165,90,0.2)'; }}
           />
-          <CaptureButton
-            onClick={handleCapture}
-            disabled={!canCapture}
-          />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <input
+              type="text"
+              value={wishText}
+              onChange={(e) => onWishChange(e.target.value.slice(0, 60))}
+              placeholder={i.wishPlaceholder}
+              maxLength={60}
+              className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 md:py-4 text-xs sm:text-sm md:text-base rounded border outline-none transition-colors min-w-0"
+              style={{
+                backgroundColor: 'rgba(197,165,90,0.05)',
+                borderColor: 'rgba(197,165,90,0.2)',
+                color: 'white',
+                fontStyle: 'italic',
+              }}
+              onFocus={(e) => { e.target.style.borderColor = 'rgba(197,165,90,0.5)'; }}
+              onBlur={(e) => { e.target.style.borderColor = 'rgba(197,165,90,0.2)'; }}
+            />
+            <CaptureButton
+              onClick={handleCapture}
+              disabled={!canCapture}
+            />
+          </div>
         </div>
 
         {!selectedFandom && (

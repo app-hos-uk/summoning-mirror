@@ -2,8 +2,10 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Share2, Download, RefreshCw, Crown } from 'lucide-react';
 import QRCode from 'qrcode';
 import type { Fandom, Lang, CaptureMode } from '../types/fandom';
+import type { PhotoReserve, StatusTier } from '../types/loyalty';
 import { BRAND, getShareTextForFandom } from '../utils/branding';
 import { getFounderRegisterUrl } from '../utils/loyalty';
+import { getPassportUrl } from '../utils/loyaltyTiers';
 import { t } from '../utils/i18n';
 import { compositeImage } from '../utils/compositor';
 import {
@@ -18,14 +20,23 @@ import {
 } from '../utils/share';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { playRevealSound } from '../utils/sounds';
-import { trackCardGenerated, trackShare, uploadPhoto } from '../hooks/useAnalytics';
+import {
+  trackCardGenerated,
+  trackShare,
+  reservePhoto,
+  uploadPhoto,
+} from '../hooks/useAnalytics';
 import FanCounter from '../components/FanCounter';
 import EmailCapture from '../components/EmailCapture';
+import ShareToEarnBanner from '../components/ShareToEarnBanner';
+import StatusBadge from '../components/StatusBadge';
 
 interface Props {
   photoSnapshot: HTMLCanvasElement;
   fandom: Fandom;
   wishText: string;
+  guestName: string;
+  fandoms: Fandom[];
   onNewPhoto: () => void;
   onReset: () => void;
   lang: Lang;
@@ -36,6 +47,8 @@ export default function ResultScreen({
   photoSnapshot,
   fandom,
   wishText,
+  guestName,
+  fandoms,
   onNewPhoto,
   onReset,
   lang,
@@ -47,13 +60,11 @@ export default function ResultScreen({
   const [showPrideBanner, setShowPrideBanner] = useState(false);
   const [cardRevealed, setCardRevealed] = useState(false);
   const [interactionReady, setInteractionReady] = useState(false);
-  const [photoId, setPhotoId] = useState<string | null>(null);
+  const [photoReserve, setPhotoReserve] = useState<PhotoReserve | null>(null);
   const i = t(lang);
   const isGroup = captureMode === 'group';
   const shareText = getShareTextForFandom(fandom.displayName, isGroup);
 
-  // Keep the photo card visible for 5 seconds so users can share/save,
-  // and also prevents ghost touch events from the capture button.
   useEffect(() => {
     const guard = setTimeout(() => setInteractionReady(true), 5000);
     return () => clearTimeout(guard);
@@ -85,9 +96,20 @@ export default function ResultScreen({
     async function render() {
       if (!canvasRef.current) return;
 
+      const reserve = await reservePhoto(fandom.id, fandom.displayName);
+      if (cancelled) return;
+
+      if (reserve) {
+        setPhotoReserve(reserve);
+      }
+
+      const passportUrl = reserve
+        ? reserve.passportUrl
+        : getPassportUrl(crypto.randomUUID());
+
       let qrDataUrl = '';
       try {
-        qrDataUrl = await QRCode.toDataURL(BRAND.qrUrl, {
+        qrDataUrl = await QRCode.toDataURL(passportUrl, {
           width: 200,
           margin: 1,
           color: { dark: '#0C1428', light: '#FFFFFF' },
@@ -104,14 +126,26 @@ export default function ResultScreen({
 
       if (cancelled) return;
 
+      const visitDate = new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+
       try {
-        compositeImage(canvasRef.current, photoSnapshot, fandom, wishText, {
-          emblem,
-          emblemCircle,
-          wordogram,
-          stripImage,
-          qrImage,
-        });
+        compositeImage(
+          canvasRef.current,
+          photoSnapshot,
+          fandom,
+          wishText,
+          { emblem, emblemCircle, wordogram, stripImage, qrImage },
+          {
+            guestName: guestName || undefined,
+            serialNumber: reserve?.serialNumber,
+            visitDate,
+            isGroup,
+          }
+        );
       } catch (err) {
         console.error('Compositing failed:', err);
       }
@@ -119,11 +153,20 @@ export default function ResultScreen({
       setCompositing(false);
       trackCardGenerated(fandom.id, fandom.displayName);
 
-      if (canvasRef.current && !cancelled) {
+      if (canvasRef.current && reserve && !cancelled) {
         try {
           const blob = await canvasToUploadBlob(canvasRef.current);
-          const id = await uploadPhoto(blob, fandom.id, fandom.displayName);
-          if (!cancelled && id) setPhotoId(id);
+          await uploadPhoto(blob, fandom.id, fandom.displayName, {
+            photoId: reserve.id,
+            guestName: guestName || undefined,
+            wishText: wishText || undefined,
+            captureMode,
+            serialNumber: reserve.serialNumber,
+            visitOrdinal: reserve.visitOrdinal,
+            fandomOrdinal: reserve.fandomOrdinal,
+            ugcCode: reserve.ugcCode,
+            statusTier: reserve.statusTier,
+          });
         } catch {
           /* non-critical — sharing still works locally */
         }
@@ -149,7 +192,7 @@ export default function ResultScreen({
       cancelled = true;
       timers.forEach(clearTimeout);
     };
-  }, [photoSnapshot, fandom, wishText, loadImage]);
+  }, [photoSnapshot, fandom, wishText, guestName, captureMode, isGroup, loadImage]);
 
   const handleShare = async () => {
     if (!canvasRef.current || compositing) return;
@@ -210,6 +253,7 @@ export default function ResultScreen({
   };
 
   const disabledStyle = compositing ? { opacity: 0.4, pointerEvents: 'none' as const } : {};
+  const accentColor = fandom.accentColor;
 
   return (
     <div className="screen-enter flex flex-col md:flex-row items-center md:justify-center h-full w-full gap-3 sm:gap-4 md:gap-10 p-3 sm:p-4 md:p-8 relative overflow-y-auto"
@@ -217,7 +261,6 @@ export default function ResultScreen({
 
       <div className="sparkle-field absolute inset-0 pointer-events-none z-0" />
 
-      {/* Composited image with cinematic reveal */}
       <div className="relative flex-shrink-0 flex items-center justify-center z-10">
         {compositing && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
@@ -234,7 +277,7 @@ export default function ResultScreen({
             maxWidth: 'min(90vw, 480px)',
             width: 'auto',
             height: 'auto',
-            border: '2px solid rgba(197,165,90,0.3)',
+            border: `2px solid ${accentColor}55`,
             opacity: compositing ? 0.2 : 1,
             transform: compositing ? 'scale(0.85)' : 'scale(1)',
             transition: 'opacity 0.6s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -242,12 +285,11 @@ export default function ResultScreen({
         />
       </div>
 
-      {/* Actions panel */}
       <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 z-10 max-w-xs sm:max-w-sm md:max-w-md w-full pb-4 sm:pb-6 md:pb-0">
         {showPrideBanner && (
           <div className="pride-banner text-center mb-0.5 sm:mb-1">
             <p className="text-base sm:text-lg md:text-2xl font-bold tracking-wider text-glow-gold"
-              style={{ color: fandom.accentColor, fontFamily: 'Georgia, serif' }}>
+              style={{ color: accentColor, fontFamily: 'Georgia, serif' }}>
               {fandom.displayName.toUpperCase()}
             </p>
             <p className="text-[10px] sm:text-xs md:text-sm tracking-[0.3em] mt-0.5 sm:mt-1"
@@ -261,25 +303,32 @@ export default function ResultScreen({
           </div>
         )}
 
-        {showPrideBanner && (
-          <div className="pride-banner">
-            <FanCounter lang={lang} fandomName={fandom.displayName} />
+        {showPrideBanner && photoReserve && (
+          <div className="pride-banner w-full flex flex-col items-center gap-2">
+            <StatusBadge tier={photoReserve.statusTier as StatusTier} lang={lang} />
+            <FanCounter
+              lang={lang}
+              fandomName={fandom.displayName}
+              fandomOrdinal={photoReserve.fandomOrdinal}
+              fandomTotal={photoReserve.fandomTotal}
+            />
           </div>
         )}
 
+        {/* Primary CTA: Share */}
         <button
           onClick={handleShare}
           disabled={compositing}
-          className="btn-gold-shimmer w-full flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 md:px-12 py-2.5 sm:py-3 md:py-4 text-xs sm:text-sm md:text-base font-bold tracking-[0.15em] rounded-sm border-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
+          className="btn-gold-shimmer w-full flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 md:px-12 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-bold tracking-[0.15em] rounded-sm border-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
           style={{
-            borderColor: BRAND.colors.gold,
-            color: BRAND.colors.gold,
-            backgroundColor: 'rgba(197,165,90,0.1)',
+            borderColor: accentColor,
+            color: accentColor,
+            backgroundColor: `${accentColor}18`,
             ...disabledStyle,
           }}>
           <Share2 size={18} className="sm:hidden" />
           <Share2 size={20} className="hidden sm:block" />
-          {i.share}
+          {i.shareAndJoin}
         </button>
 
         <div className="social-share-row w-full" style={disabledStyle}>
@@ -288,7 +337,8 @@ export default function ResultScreen({
             onClick={() => handleSocialShare('instagram')}
             disabled={compositing}
             className="social-share-btn social-share-instagram"
-            aria-label={i.shareInstagram}>
+            aria-label={i.shareInstagram}
+            style={{ borderColor: `${accentColor}40` }}>
             {i.shareInstagram}
           </button>
           <button
@@ -296,7 +346,8 @@ export default function ResultScreen({
             onClick={() => handleSocialShare('whatsapp')}
             disabled={compositing}
             className="social-share-btn social-share-whatsapp"
-            aria-label={i.shareWhatsApp}>
+            aria-label={i.shareWhatsApp}
+            style={{ borderColor: `${accentColor}40` }}>
             {i.shareWhatsApp}
           </button>
           <button
@@ -304,7 +355,8 @@ export default function ResultScreen({
             onClick={() => handleSocialShare('twitter')}
             disabled={compositing}
             className="social-share-btn social-share-twitter"
-            aria-label={i.shareTwitter}>
+            aria-label={i.shareTwitter}
+            style={{ borderColor: `${accentColor}40` }}>
             {i.shareTwitter}
           </button>
           <button
@@ -312,11 +364,26 @@ export default function ResultScreen({
             onClick={() => handleSocialShare('tiktok')}
             disabled={compositing}
             className="social-share-btn social-share-tiktok"
-            aria-label={i.shareTikTok}>
+            aria-label={i.shareTikTok}
+            style={{ borderColor: `${accentColor}40` }}>
             {i.shareTikTok}
           </button>
         </div>
 
+        {shareHint && (
+          <p className="text-xs tracking-wider text-center"
+            style={{ color: 'rgba(197,165,90,0.5)' }}>
+            {shareHint}
+          </p>
+        )}
+
+        {showPrideBanner && photoReserve && (
+          <div className="pride-banner w-full">
+            <ShareToEarnBanner ugcCode={photoReserve.ugcCode} lang={lang} />
+          </div>
+        )}
+
+        {/* Secondary: Save + New Photo */}
         <div className="flex w-full gap-2 sm:gap-3">
           <button
             onClick={handleSave}
@@ -337,55 +404,51 @@ export default function ResultScreen({
             style={{
               borderColor: 'rgba(197,165,90,0.3)',
               color: 'rgba(197,165,90,0.7)',
+              opacity: interactionReady ? 1 : 0.4,
+              pointerEvents: interactionReady ? 'auto' : 'none',
             }}>
             <RefreshCw size={16} />
             {i.newPhoto}
           </button>
         </div>
 
-        {shareHint && (
-          <p className="text-xs tracking-wider text-center"
-            style={{ color: 'rgba(197,165,90,0.5)' }}>
-            {shareHint}
-          </p>
-        )}
-
-        {/* Email capture */}
+        {/* Email capture — membership onboarding */}
         {showPrideBanner && (
           <div className="pride-banner w-full flex justify-center">
             <EmailCapture
               fandomId={fandom.id}
               fandomName={fandom.displayName}
               lang={lang}
-              photoId={photoId}
+              photoId={photoReserve?.id}
+              guestName={guestName}
+              wishText={wishText}
+              fandoms={fandoms}
             />
           </div>
         )}
 
-        {/* Founder member CTA */}
+        {/* Tertiary: Founder member CTA */}
         {showPrideBanner && (
           <a
             href={getFounderRegisterUrl(fandom.displayName)}
             target="_blank"
             rel="noopener noreferrer"
-            className="pride-banner w-full flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 text-[10px] sm:text-xs md:text-sm font-bold tracking-[0.12em] rounded-sm border-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
+            className="pride-banner w-full flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 text-[10px] sm:text-xs tracking-[0.1em] rounded-sm border cursor-pointer transition-all hover:scale-105 active:scale-95"
             style={{
-              borderColor: BRAND.colors.gold,
-              color: BRAND.colors.gold,
-              backgroundColor: 'rgba(197,165,90,0.08)',
+              borderColor: 'rgba(197,165,90,0.25)',
+              color: 'rgba(197,165,90,0.55)',
+              backgroundColor: 'rgba(197,165,90,0.04)',
               textDecoration: 'none',
             }}>
-            <Crown size={14} className="sm:hidden" />
-            <Crown size={16} className="hidden sm:block" />
+            <Crown size={13} />
             {i.becomeFoundingMember}
           </a>
         )}
 
-        {/* Suggested caption with fandom-specific hashtags */}
         <div className="mt-0.5 sm:mt-1 p-2 sm:p-3 md:p-4 rounded border w-full"
           style={{
-            borderColor: 'rgba(197,165,90,0.15)',
-            backgroundColor: 'rgba(197,165,90,0.03)',
+            borderColor: `${accentColor}25`,
+            backgroundColor: `${accentColor}08`,
           }}>
           <p className="text-[9px] sm:text-[10px] md:text-xs tracking-wider mb-1 sm:mb-2"
             style={{ color: 'rgba(197,165,90,0.4)' }}>
@@ -393,7 +456,7 @@ export default function ResultScreen({
           </p>
           <p className="text-[11px] sm:text-xs md:text-sm italic leading-relaxed"
             style={{ color: 'rgba(255,255,255,0.6)' }}>
-            {getShareTextForFandom(fandom.displayName, isGroup)}
+            {shareText}
           </p>
         </div>
       </div>

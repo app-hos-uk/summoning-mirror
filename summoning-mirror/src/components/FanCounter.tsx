@@ -1,50 +1,54 @@
 import { useFanCounter } from '../hooks/useAnalytics';
 import type { Lang } from '../types/fandom';
+import { getOrdinalSuffix } from '../utils/loyaltyTiers';
 import { t } from '../utils/i18n';
 
 interface Props {
   lang: Lang;
   fandomName?: string;
+  fandomOrdinal?: number;
+  fandomTotal?: number;
 }
 
-export default function FanCounter({ lang, fandomName }: Props) {
-  const count = useFanCounter();
+export default function FanCounter({
+  lang,
+  fandomName,
+  fandomOrdinal,
+  fandomTotal,
+}: Props) {
+  const globalCount = useFanCounter();
   const i = t(lang);
 
-  if (count === null || count === 0) return null;
+  if (fandomOrdinal && fandomName) {
+    const suffix = getOrdinalSuffix(fandomOrdinal, lang);
+    return (
+      <div className="fan-counter-reveal text-center">
+        <p className="text-xs md:text-sm tracking-wider" style={{ color: 'rgba(197,165,90,0.5)' }}>
+          <span className="font-bold" style={{ color: '#C5A55A' }}>
+            {fandomOrdinal.toLocaleString()}{suffix}
+          </span>{' '}
+          {fandomName} {i.fanCounter}
+        </p>
+        {fandomTotal !== undefined && (
+          <p className="text-[9px] sm:text-[10px] tracking-wider mt-1"
+            style={{ color: 'rgba(197,165,90,0.35)' }}>
+            {(fandomTotal + 1).toLocaleString()} {fandomName} {i.fandomTotal}
+          </p>
+        )}
+      </div>
+    );
+  }
 
-  const ordinal = count + 1;
+  if (globalCount === null || globalCount === 0) return null;
 
   return (
     <div className="fan-counter-reveal text-center">
       <p className="text-xs md:text-sm tracking-wider" style={{ color: 'rgba(197,165,90,0.5)' }}>
-        {fandomName ? (
-          <>
-            <span className="font-bold" style={{ color: '#C5A55A' }}>
-              {ordinal.toLocaleString()}{lang === 'en' ? getSuffix(ordinal) : ''}
-            </span>{' '}
-            {fandomName} {i.fanCounter}
-          </>
-        ) : (
-          <>
-            <span className="font-bold" style={{ color: '#C5A55A' }}>
-              {count.toLocaleString()}+
-            </span>{' '}
-            {i.fanCounter}
-          </>
-        )}
+        <span className="font-bold" style={{ color: '#C5A55A' }}>
+          {globalCount.toLocaleString()}+
+        </span>{' '}
+        {i.fanCounter}
       </p>
     </div>
   );
-}
-
-function getSuffix(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return 'th';
-  switch (n % 10) {
-    case 1: return 'st';
-    case 2: return 'nd';
-    case 3: return 'rd';
-    default: return 'th';
-  }
 }

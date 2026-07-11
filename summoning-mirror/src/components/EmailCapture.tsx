@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Mail, Send, Check } from 'lucide-react';
 import { submitEmail, sendPhotoEmail } from '../hooks/useAnalytics';
 import { registerFounderMember } from '../utils/loyalty';
-import type { Lang } from '../types/fandom';
+import type { Fandom, Lang } from '../types/fandom';
 import { t } from '../utils/i18n';
 
 interface Props {
@@ -10,26 +10,51 @@ interface Props {
   fandomName: string;
   lang: Lang;
   photoId?: string | null;
+  guestName?: string;
+  wishText?: string;
+  fandoms?: Fandom[];
 }
 
-export default function EmailCapture({ fandomId, fandomName, lang, photoId }: Props) {
-  const [firstName, setFirstName] = useState('');
+export default function EmailCapture({
+  fandomId,
+  fandomName,
+  lang,
+  photoId,
+  guestName = '',
+  wishText = '',
+  fandoms = [],
+}: Props) {
+  const [firstName, setFirstName] = useState(guestName);
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(true);
+  const [preferredFandom, setPreferredFandom] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [sentWithFounder, setSentWithFounder] = useState(false);
   const [photoEmailed, setPhotoEmailed] = useState(false);
   const formStartedAt = useRef(Date.now());
   const i = t(lang);
 
+  useEffect(() => {
+    if (guestName && !firstName) setFirstName(guestName);
+  }, [guestName, firstName]);
+
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   const canSubmit = firstName.trim().length > 0 && isValidEmail(email);
+
+  const otherFandoms = fandoms
+    .filter((f) => f.enabled && f.id !== fandomId)
+    .slice(0, 6);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setStatus('sending');
 
-    const emailOk = await submitEmail(email, fandomId);
+    const emailOk = await submitEmail(email, fandomId, {
+      firstName: firstName.trim(),
+      photoId: photoId || undefined,
+      wishText: wishText || undefined,
+      preferredFandom: preferredFandom || undefined,
+    });
     if (!emailOk) {
       setStatus('idle');
       return;
@@ -45,7 +70,7 @@ export default function EmailCapture({ fandomId, fandomName, lang, photoId }: Pr
       await registerFounderMember({
         firstName: firstName.trim(),
         email: email.trim(),
-        fandomName,
+        fandomName: preferredFandom || fandomName,
         formStartedAt: formStartedAt.current,
       });
       setSentWithFounder(true);
@@ -79,10 +104,14 @@ export default function EmailCapture({ fandomId, fandomName, lang, photoId }: Pr
 
   return (
     <div className="w-full max-w-xs">
-      <p className="text-[10px] tracking-wider mb-2 text-center"
-        style={{ color: 'rgba(197,165,90,0.4)' }}>
+      <p className="text-[10px] sm:text-xs font-bold tracking-[0.12em] mb-1 text-center"
+        style={{ color: 'rgba(197,165,90,0.6)' }}>
         <Mail size={10} className="inline mr-1" style={{ verticalAlign: 'middle' }} />
-        {i.emailHint}
+        {i.keepMyCard}
+      </p>
+      <p className="text-[9px] tracking-wider mb-2 text-center"
+        style={{ color: 'rgba(197,165,90,0.35)' }}>
+        {i.emailMembershipHint}
       </p>
       <div className="flex flex-col gap-2">
         <input
@@ -116,6 +145,37 @@ export default function EmailCapture({ fandomId, fandomName, lang, photoId }: Pr
             <Send size={14} />
           </button>
         </div>
+
+        {otherFandoms.length > 0 && (
+          <div>
+            <p className="text-[9px] tracking-wider mb-1.5"
+              style={{ color: 'rgba(197,165,90,0.35)' }}>
+              {i.nextFandomLabel}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {otherFandoms.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setPreferredFandom(
+                    preferredFandom === f.displayName ? '' : f.displayName
+                  )}
+                  className="fandom-chip"
+                  style={{
+                    borderColor: preferredFandom === f.displayName
+                      ? f.accentColor : 'rgba(197,165,90,0.2)',
+                    color: preferredFandom === f.displayName
+                      ? f.accentColor : 'rgba(197,165,90,0.5)',
+                    backgroundColor: preferredFandom === f.displayName
+                      ? `${f.accentColor}15` : 'transparent',
+                  }}>
+                  {f.displayName}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="flex items-start gap-2 cursor-pointer select-none">
           <input
             type="checkbox"

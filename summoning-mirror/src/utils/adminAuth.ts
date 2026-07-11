@@ -21,3 +21,20 @@ export function adminHeaders(extra?: Record<string, string>): Record<string, str
 export function adminJsonHeaders(): Record<string, string> {
   return adminHeaders({ 'Content-Type': 'application/json' });
 }
+
+export function isUnauthorizedResponse(status: number): boolean {
+  return status === 401;
+}
+
+export async function verifyAdminSession(): Promise<boolean> {
+  const token = getAdminToken();
+  if (!token) return false;
+  try {
+    const res = await fetch('/api/admin/session', { headers: adminHeaders() });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.valid === true;
+  } catch {
+    return false;
+  }
+}

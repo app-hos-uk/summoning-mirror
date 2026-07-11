@@ -26,6 +26,7 @@ export const BRAND = {
     '#HouseOfSpells',
     '#TimesSquare',
   ],
+  passportBaseUrl: process.env.BASE_URL || '',
   qrUrl: 'https://houseofspells.com/nyc',
   social: {
     instagram: '@houseofspellsnyc',

@@ -3,7 +3,7 @@ import { Plus, Trash2, Edit3, Save, X, Eye, EyeOff, ArrowUp, ArrowDown, Upload, 
 import { useAllFandoms } from '../hooks/useFandoms';
 import type { Fandom } from '../types/fandom';
 import { BRAND } from '../utils/branding';
-import { adminHeaders, adminJsonHeaders, clearAdminToken } from '../utils/adminAuth';
+import { adminHeaders, adminJsonHeaders, clearAdminToken, isUnauthorizedResponse } from '../utils/adminAuth';
 
 const LOCKED_POSITIONS: Record<number, string> = {
   1: 'marvel',
@@ -15,7 +15,12 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ onLogout }: AdminPanelProps) {
-  const { fandoms, loading, refetch } = useAllFandoms();
+  const handleUnauthorized = useCallback(() => {
+    clearAdminToken();
+    onLogout();
+  }, [onLogout]);
+
+  const { fandoms, loading, refetch } = useAllFandoms(handleUnauthorized);
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<Partial<Fandom>>({});
@@ -28,6 +33,14 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     setTimeout(() => setMessage(''), 3000);
   }, []);
 
+  const guardAdminResponse = useCallback((res: Response): boolean => {
+    if (isUnauthorizedResponse(res.status)) {
+      handleUnauthorized();
+      return false;
+    }
+    return true;
+  }, [handleUnauthorized]);
+
   const handleCreate = async () => {
     if (!form.displayName || !form.accentColor) {
       showMessage('Name and accent color are required');
@@ -39,6 +52,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         headers: adminJsonHeaders(),
         body: JSON.stringify(form),
       });
+      if (!guardAdminResponse(res)) return;
       if (!res.ok) {
         const err = await res.json();
         showMessage(err.error || 'Failed to create');
@@ -60,6 +74,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         headers: adminJsonHeaders(),
         body: JSON.stringify(form),
       });
+      if (!guardAdminResponse(res)) return;
       if (!res.ok) {
         const err = await res.json();
         showMessage(err.error || 'Failed to update');
@@ -81,6 +96,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         method: 'DELETE',
         headers: adminHeaders(),
       });
+      if (!guardAdminResponse(res)) return;
       if (!res.ok) {
         const err = await res.json();
         showMessage(err.error || 'Failed to delete');
@@ -95,11 +111,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   const handleToggle = async (fandom: Fandom) => {
     try {
-      await fetch(`/api/admin/fandoms/${fandom.id}`, {
+      const res = await fetch(`/api/admin/fandoms/${fandom.id}`, {
         method: 'PUT',
         headers: adminJsonHeaders(),
         body: JSON.stringify({ enabled: !fandom.enabled }),
       });
+      if (!guardAdminResponse(res)) return;
       refetch();
     } catch {
       showMessage('Network error');
@@ -116,11 +133,12 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
 
     try {
-      await fetch(`/api/admin/fandoms/${fandom.id}`, {
+      const res = await fetch(`/api/admin/fandoms/${fandom.id}`, {
         method: 'PUT',
         headers: adminJsonHeaders(),
         body: JSON.stringify({ sortOrder: newOrder }),
       });
+      if (!guardAdminResponse(res)) return;
       refetch();
     } catch {
       showMessage('Network error');
@@ -137,6 +155,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
         headers: adminHeaders(),
         body: formData,
       });
+      if (!guardAdminResponse(res)) return;
       if (!res.ok) {
         showMessage('Failed to upload image');
         return;

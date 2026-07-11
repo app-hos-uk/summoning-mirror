@@ -9,6 +9,13 @@ interface CompositorAssets {
   qrImage?: HTMLImageElement;
 }
 
+export interface CardMetadata {
+  guestName?: string;
+  serialNumber?: string;
+  visitDate?: string;
+  isGroup?: boolean;
+}
+
 function isImageReady(img: HTMLImageElement): boolean {
   return img.complete && img.naturalWidth > 0;
 }
@@ -18,7 +25,8 @@ export function compositeImage(
   photoSource: CanvasImageSource,
   fandom: Fandom,
   wishText: string,
-  assets: CompositorAssets
+  assets: CompositorAssets,
+  metadata: CardMetadata = {}
 ): void {
   const { width: W, height: H, borderWidth: B } = BRAND.compositor;
   canvas.width = W;
@@ -27,6 +35,7 @@ export function compositeImage(
   const ctx = canvas.getContext('2d')!;
   const innerW = W - 2 * B;
   const accent = fandom.accentColor;
+  const fanBadge = metadata.isGroup ? BRAND.text.fansBadge : BRAND.text.fanBadge;
 
   // Layer 1: Gold border frame
   ctx.fillStyle = BRAND.colors.gold;
@@ -36,13 +45,31 @@ export function compositeImage(
   ctx.fillStyle = BRAND.colors.navy;
   ctx.fillRect(B, B, innerW, H - 2 * B);
 
-  // Layer 3: Visitor photo -- top portion
+  // Layer 3: Visitor photo -- top portion with contrast boost
   const photoH = Math.round(H * 0.38);
   ctx.save();
   ctx.translate(W, B);
   ctx.scale(-1, 1);
+  ctx.filter = 'contrast(1.12) saturate(1.08) brightness(1.03)';
   ctx.drawImage(photoSource, B, 0, innerW, photoH);
+  ctx.filter = 'none';
   ctx.restore();
+
+  // Guest name overlay on photo (bottom-left)
+  if (metadata.guestName) {
+    const name = metadata.guestName.trim().toUpperCase();
+    ctx.font = 'bold 16px Georgia,serif';
+    const nw = ctx.measureText(name).width + 24;
+    const nx = B + 16;
+    const ny = B + photoH - 36;
+    ctx.fillStyle = 'rgba(12,20,40,0.75)';
+    ctx.beginPath();
+    ctx.roundRect(nx, ny, nw, 28, 4);
+    ctx.fill();
+    ctx.fillStyle = BRAND.colors.gold;
+    ctx.textAlign = 'left';
+    ctx.fillText(name, nx + 12, ny + 19);
+  }
 
   // Layer 4: Emblem watermark on photo
   if (isImageReady(assets.emblem)) {
@@ -99,7 +126,6 @@ export function compositeImage(
     );
     ctx.restore();
 
-    // Layer 6: Dark readability overlay with stronger gradient
     const overlay = ctx.createLinearGradient(0, atmY, 0, atmY + atmH);
     overlay.addColorStop(0, 'rgba(12,20,40,0.4)');
     overlay.addColorStop(0.25, 'rgba(12,20,40,0.55)');
@@ -110,14 +136,12 @@ export function compositeImage(
     ctx.fillRect(B, atmY, innerW, atmH);
   }
 
-  // Layer 7: Photo-to-atmosphere blend
   const blend = ctx.createLinearGradient(0, atmY - 50, 0, atmY + 30);
   blend.addColorStop(0, 'rgba(12,20,40,0)');
   blend.addColorStop(1, 'rgba(12,20,40,0.5)');
   ctx.fillStyle = blend;
   ctx.fillRect(B, atmY - 50, innerW, 80);
 
-  // Layer 8: Accent stripe pair
   ctx.fillStyle = accent;
   ctx.globalAlpha = 0.45;
   ctx.fillRect(B, atmY, innerW, 2);
@@ -125,7 +149,6 @@ export function compositeImage(
   ctx.fillRect(B, atmY + 3, innerW, 1);
   ctx.globalAlpha = 1;
 
-  // --- Branding section: compute sizes & center vertically ---
   const embSize = 110;
   const wmW = 220;
   const wmH = isImageReady(assets.wordogram)
@@ -155,7 +178,7 @@ export function compositeImage(
   const dividerH = 18;
   const tagH = 20;
   const eventH = 15;
-  const socialH = 13;
+  const socialH = 14;
 
   let totalH = titleH + GAP_TITLE_BADGE
     + badgeH + GAP_BADGE_WISH
@@ -170,7 +193,6 @@ export function compositeImage(
   let y = atmY + Math.max(20, (atmH - totalH) / 2);
   ctx.textAlign = 'center';
 
-  // Layer 9: Fandom name
   ctx.font = `bold ${fontSize}px Georgia,serif`;
   ctx.fillStyle = accent;
   ctx.shadowColor = 'rgba(0,0,0,0.75)';
@@ -181,16 +203,14 @@ export function compositeImage(
   ctx.shadowOffsetY = 0;
   y += titleH + GAP_TITLE_BADGE;
 
-  // Layer 10: Fan badge
   ctx.font = '300 22px Georgia,serif';
   ctx.fillStyle = BRAND.colors.gold;
   ctx.shadowColor = 'rgba(0,0,0,0.5)';
   ctx.shadowBlur = 10;
-  ctx.fillText(BRAND.text.fanBadge, W / 2, y + 18);
+  ctx.fillText(fanBadge, W / 2, y + 18);
   ctx.shadowBlur = 0;
   y += badgeH + GAP_BADGE_WISH;
 
-  // Layer 11: Wish text
   if (wishText) {
     ctx.font = 'italic 20px Georgia,serif';
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -211,7 +231,6 @@ export function compositeImage(
     y += GAP_WISH_DIVIDER;
   }
 
-  // Layer 12: Divider with diamond
   const divLineW = 120;
   ctx.strokeStyle = 'rgba(197,165,90,0.45)';
   ctx.lineWidth = 1;
@@ -235,7 +254,6 @@ export function compositeImage(
   ctx.globalAlpha = 1;
   y += dividerH + GAP_DIVIDER_EMBLEM;
 
-  // Emblem Circle with glow ring
   if (isImageReady(assets.emblemCircle)) {
     const ex = W / 2 - embSize / 2;
     const ey = y;
@@ -251,7 +269,6 @@ export function compositeImage(
     y += embSize + GAP_EMBLEM_WORD;
   }
 
-  // Wordogram
   if (isImageReady(assets.wordogram)) {
     ctx.shadowColor = 'rgba(0,0,0,0.4)';
     ctx.shadowBlur = 10;
@@ -260,7 +277,6 @@ export function compositeImage(
     y += wmH + GAP_WORD_TAG;
   }
 
-  // Tagline
   ctx.font = '600 16px Georgia,serif';
   ctx.fillStyle = 'rgba(197,165,90,0.75)';
   ctx.shadowColor = 'rgba(0,0,0,0.4)';
@@ -269,8 +285,7 @@ export function compositeImage(
   ctx.shadowBlur = 0;
   y += tagH + GAP_TAG_EVENT;
 
-  // Event footer
-  ctx.font = '12px Georgia,serif';
+  ctx.font = '13px Georgia,serif';
   ctx.fillStyle = 'rgba(197,165,90,0.55)';
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = 4;
@@ -278,12 +293,25 @@ export function compositeImage(
   ctx.shadowBlur = 0;
   y += eventH + GAP_EVENT_SOCIAL;
 
-  // Social + hashtags footer
-  ctx.font = '11px Georgia,serif';
+  ctx.font = '12px Georgia,serif';
   ctx.fillStyle = 'rgba(197,165,90,0.5)';
   ctx.fillText(BRAND.text.socialFooter, W / 2, y + 9);
 
-  // QR Code (bottom-right corner, properly padded)
+  // Serial number + visit date (bottom-left of card)
+  if (metadata.serialNumber || metadata.visitDate) {
+    const serialLine = [
+      metadata.serialNumber ? `Card ${metadata.serialNumber.replace('HOS-NYC-', '')} / Launch Series` : '',
+      metadata.visitDate || '',
+    ].filter(Boolean).join('  \u00B7  ');
+
+    ctx.font = '10px Georgia,serif';
+    ctx.fillStyle = 'rgba(197,165,90,0.45)';
+    ctx.textAlign = 'left';
+    ctx.fillText(serialLine, B + 20, H - B - 90);
+    ctx.textAlign = 'center';
+  }
+
+  // QR Code (bottom-right corner)
   if (assets.qrImage && isImageReady(assets.qrImage)) {
     const qrSize = 64;
     const qrPad = 24;
@@ -300,10 +328,9 @@ export function compositeImage(
     ctx.font = '7px Georgia,serif';
     ctx.fillStyle = 'rgba(12,20,40,0.65)';
     ctx.textAlign = 'center';
-    ctx.fillText('VISIT US', qrX + qrSize / 2, qrY + qrSize + 12);
+    ctx.fillText('YOUR PASSPORT', qrX + qrSize / 2, qrY + qrSize + 12);
   }
 
-  // Gold corner ornaments
   ctx.textAlign = 'center';
   ctx.strokeStyle = BRAND.colors.gold;
   ctx.lineWidth = 1.5;

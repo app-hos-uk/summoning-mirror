@@ -246,3 +246,118 @@ img[src*="emblem"], img[src*="logo"] {
     font-size: 10px;
   }
 }
+
+/* Face-safe framing guide */
+.face-guide-overlay {
+  z-index: 5;
+}
+
+.face-guide-oval {
+  width: 42%;
+  max-width: 220px;
+  aspect-ratio: 3 / 4;
+  border: 2px dashed rgba(197, 165, 90, 0.35);
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(12, 20, 40, 0.25);
+}
+
+.face-guide-label {
+  z-index: 6;
+}
+
+/* Status tier badges */
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.status-badge-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: rgba(197, 165, 90, 0.4);
+}
+
+.status-badge-tier {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.status-tier-pioneer {
+  color: #C5A55A;
+  border-color: rgba(197, 165, 90, 0.4);
+  background: rgba(197, 165, 90, 0.1);
+}
+
+.status-tier-summoner {
+  color: #8B9FD4;
+  border-color: rgba(139, 159, 212, 0.4);
+  background: rgba(139, 159, 212, 0.1);
+}
+
+.status-tier-archivist {
+  color: #D4A5C5;
+  border-color: rgba(212, 165, 197, 0.4);
+  background: rgba(212, 165, 197, 0.1);
+}
+
+/* Share-to-earn banner */
+.share-to-earn-banner {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(197, 165, 90, 0.25);
+  background: linear-gradient(135deg, rgba(197, 165, 90, 0.08), rgba(12, 20, 40, 0.4));
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.share-to-earn-banner:hover {
+  border-color: rgba(197, 165, 90, 0.45);
+}
+
+.ugc-code-display {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #C5A55A;
+  font-family: 'Courier New', monospace;
+}
+
+/* Fandom preference chips */
+.fandom-chip {
+  padding: 4px 10px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  border-radius: 12px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: Georgia, serif;
+}
+
+.fandom-chip:hover {
+  transform: scale(1.05);
+}
+
+/* Passport page */
+.passport-page {
+  position: relative;
+}
+
+.passport-info-card {
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(197, 165, 90, 0.2);
+  background: rgba(197, 165, 90, 0.04);
+}
+
+.passport-collection {
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px dashed rgba(197, 165, 90, 0.2);
+}
