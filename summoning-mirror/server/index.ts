@@ -17,22 +17,55 @@ app.use(helmet({ contentSecurityPolicy: false }));
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-const CONFIG_PATH = path.join(__dirname, 'config', 'fandoms.json');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const ANALYTICS_PATH = path.join(DATA_DIR, 'analytics.json');
-const EMAILS_PATH = path.join(DATA_DIR, 'emails.json');
 const DIST_DIR = path.join(__dirname, '..', 'dist');
-const FANDOMS_DIR = IS_PROD && fs.existsSync(path.join(DIST_DIR, 'fandoms'))
-  ? path.join(DIST_DIR, 'fandoms')
-  : path.join(__dirname, '..', 'public', 'fandoms');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 const CARDS_DIR = path.join(UPLOADS_DIR, 'cards');
+const ANALYTICS_PATH = path.join(DATA_DIR, 'analytics.json');
+const EMAILS_PATH = path.join(DATA_DIR, 'emails.json');
 const PHOTOS_PATH = path.join(DATA_DIR, 'photos.json');
 
-for (const dir of [UPLOADS_DIR, CARDS_DIR, DATA_DIR]) {
+// Persistent config + images: live on the volume so admin changes survive redeploys
+const CONFIG_PATH = path.join(DATA_DIR, 'fandoms.json');
+const FANDOMS_DIR = path.join(DATA_DIR, 'fandoms');
+
+// Bundled defaults shipped with the image (read-only after build)
+const BUNDLED_CONFIG = path.join(__dirname, 'config', 'fandoms.json');
+const BUNDLED_FANDOMS_CANDIDATES = [
+  path.join(DIST_DIR, 'fandoms'),
+  path.join(__dirname, '..', 'public', 'fandoms'),
+];
+const BUNDLED_FANDOMS = BUNDLED_FANDOMS_CANDIDATES.find((p) => fs.existsSync(p)) || null;
+
+for (const dir of [UPLOADS_DIR, CARDS_DIR, DATA_DIR, FANDOMS_DIR]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
+}
+
+// Seed persistent config from bundled defaults on first run
+if (!fs.existsSync(CONFIG_PATH) && fs.existsSync(BUNDLED_CONFIG)) {
+  fs.copyFileSync(BUNDLED_CONFIG, CONFIG_PATH);
+  console.log('[Config] Seeded fandoms.json from bundled defaults');
+}
+
+// Seed persistent fandom images from bundled defaults on first run
+if (BUNDLED_FANDOMS) {
+  try {
+    for (const file of fs.readdirSync(BUNDLED_FANDOMS)) {
+      const src = path.join(BUNDLED_FANDOMS, file);
+      if (!fs.statSync(src).isFile()) continue;
+      const dest = path.join(FANDOMS_DIR, file);
+      if (!fs.existsSync(dest)) {
+        fs.copyFileSync(src, dest);
+        console.log(`[Config] Seeded fandom image: ${file}`);
+      }
+    }
+  } catch (err) {
+    console.error('[Config] Failed to seed fandom images:', err);
+  }
+} else {
+  console.warn('[Config] No bundled fandom images found to seed');
 }
 
 const CORS_ORIGIN = IS_PROD ? (process.env.BASE_URL || false) : true;
