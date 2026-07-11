@@ -26,11 +26,12 @@ export default function EmailCapture({
 }: Props) {
   const [firstName, setFirstName] = useState(guestName);
   const [email, setEmail] = useState('');
-  const [consent, setConsent] = useState(true);
+  const [consent, setConsent] = useState(false);
   const [preferredFandom, setPreferredFandom] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [sentWithFounder, setSentWithFounder] = useState(false);
   const [photoEmailed, setPhotoEmailed] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const formStartedAt = useRef(Date.now());
   const i = t(lang);
 
@@ -62,18 +63,23 @@ export default function EmailCapture({
 
     let emailed = false;
     if (photoId) {
-      emailed = await sendPhotoEmail(photoId, email.trim(), firstName.trim(), fandomName);
+      const result = await sendPhotoEmail(photoId, email.trim(), firstName.trim(), fandomName);
+      if (result === 'needs_verification') {
+        setNeedsVerification(true);
+      } else {
+        emailed = result === true;
+      }
     }
     setPhotoEmailed(emailed);
 
     if (consent) {
-      await registerFounderMember({
+      const founderOk = await registerFounderMember({
         firstName: firstName.trim(),
         email: email.trim(),
         fandomName: preferredFandom || fandomName,
         formStartedAt: formStartedAt.current,
       });
-      setSentWithFounder(true);
+      setSentWithFounder(founderOk);
     }
 
     setStatus('sent');
@@ -88,9 +94,11 @@ export default function EmailCapture({
         }}>
         <Check size={14} style={{ color: 'rgba(50,200,80,0.8)' }} />
         <span className="text-xs tracking-wider" style={{ color: 'rgba(50,200,80,0.8)' }}>
-          {sentWithFounder
-            ? (photoEmailed ? i.emailSentFounder : i.emailRegisteredFounder)
-            : (photoEmailed ? i.emailSent : i.emailRegistered)}
+          {needsVerification
+            ? 'Check your inbox — verify your email to receive your card'
+            : sentWithFounder
+              ? (photoEmailed ? i.emailSentFounder : i.emailRegisteredFounder)
+              : (photoEmailed ? i.emailSent : i.emailRegistered)}
         </span>
       </div>
     );

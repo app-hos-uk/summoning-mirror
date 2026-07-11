@@ -4,4 +4,8 @@ uploads/
 *.log
 .DS_Store
 .env
-.env.local
+.env.*
+!.env.example
+
+server/data/*.json
+!server/data/.gitkeep

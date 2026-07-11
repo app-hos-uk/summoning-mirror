@@ -48,18 +48,6 @@ export function useAnalytics() {
   return { data, loading, error, refetch };
 }
 
-export async function trackCardGenerated(fandomId: string, fandomName: string): Promise<void> {
-  try {
-    await fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event: 'card_generated', fandomId, fandomName }),
-    });
-  } catch {
-    // non-critical
-  }
-}
-
 export async function trackShare(fandomId: string): Promise<void> {
   try {
     await fetch('/api/analytics/track', {
@@ -117,6 +105,7 @@ export async function uploadPhoto(
   fandomName: string,
   metadata: {
     photoId: string;
+    reserveToken: string;
     guestName?: string;
     wishText?: string;
     captureMode?: string;
@@ -133,6 +122,7 @@ export async function uploadPhoto(
     form.append('fandomId', fandomId);
     form.append('fandomName', fandomName);
     form.append('photoId', metadata.photoId);
+    form.append('reserveToken', metadata.reserveToken);
     if (metadata.guestName) form.append('guestName', metadata.guestName);
     if (metadata.wishText) form.append('wishText', metadata.wishText);
     if (metadata.captureMode) form.append('captureMode', metadata.captureMode);
@@ -160,14 +150,17 @@ export async function sendPhotoEmail(
   email: string,
   firstName: string,
   fandomName: string
-): Promise<boolean> {
+): Promise<boolean | 'needs_verification'> {
   try {
     const res = await fetch(`/api/photos/${photoId}/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, firstName, fandomName }),
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.needsVerification) return 'needs_verification';
+    return true;
   } catch {
     return false;
   }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { LogIn, AlertCircle } from 'lucide-react';
 import { BRAND } from '../utils/branding';
+import { setAdminToken } from '../utils/adminAuth';
 
 interface Props {
   onLogin: (token: string) => void;
@@ -31,7 +32,7 @@ export default function AdminLogin({ onLogin }: Props) {
       }
 
       const { token } = await res.json();
-      sessionStorage.setItem('admin_token', token);
+      setAdminToken(token);
       onLogin(token);
     } catch {
       setError('Network error — is the server running?');

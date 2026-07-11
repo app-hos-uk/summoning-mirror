@@ -42,6 +42,7 @@ export default function CameraScreen({
 }: Props) {
   const webcamRef = useRef<Webcam>(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
   const [videoDimensionsReady, setVideoDimensionsReady] = useState(false);
   const [flashActive, setFlashActive] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -147,6 +148,7 @@ export default function CameraScreen({
             height: { ideal: 720 },
           }}
           onUserMedia={handleUserMedia}
+          onUserMediaError={() => setCameraError(true)}
           className="w-full h-full object-cover"
         />
 
@@ -171,10 +173,23 @@ export default function CameraScreen({
         {!cameraReady && (
           <div className="absolute inset-0 flex items-center justify-center"
             style={{ backgroundColor: BRAND.colors.navy }}>
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-              <span className="text-gold/60 text-sm tracking-wider">{i.initCamera}</span>
-            </div>
+            {cameraError ? (
+              <div className="flex flex-col items-center gap-3 px-6 text-center">
+                <span className="text-red-400 text-sm tracking-wider">Camera access denied or unavailable</span>
+                <span className="text-gold/40 text-xs tracking-wider">Please allow camera permissions and reload</span>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-2 px-4 py-2 text-xs tracking-wider rounded border cursor-pointer"
+                  style={{ borderColor: 'rgba(197,165,90,0.4)', color: BRAND.colors.gold }}>
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-10 h-10 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+                <span className="text-gold/60 text-sm tracking-wider">{i.initCamera}</span>
+              </div>
+            )}
           </div>
         )}
 

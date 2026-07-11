@@ -2,6 +2,7 @@ export type StatusTier = 'pioneer' | 'summoner' | 'archivist';
 
 export interface PhotoReserve {
   id: string;
+  reserveToken: string;
   serialNumber: string;
   visitOrdinal: number;
   fandomOrdinal: number;

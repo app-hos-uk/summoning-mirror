@@ -1,5 +1,6 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
@@ -11,6 +12,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
+app.use(helmet({ contentSecurityPolicy: false }));
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -22,7 +25,7 @@ const DIST_DIR = path.join(__dirname, '..', 'dist');
 const FANDOMS_DIR = IS_PROD && fs.existsSync(path.join(DIST_DIR, 'fandoms'))
   ? path.join(DIST_DIR, 'fandoms')
   : path.join(__dirname, '..', 'public', 'fandoms');
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 const CARDS_DIR = path.join(UPLOADS_DIR, 'cards');
 const PHOTOS_PATH = path.join(DATA_DIR, 'photos.json');
 
@@ -32,8 +35,9 @@ for (const dir of [UPLOADS_DIR, CARDS_DIR, DATA_DIR]) {
   }
 }
 
-app.use(cors());
-app.use(express.json());
+const CORS_ORIGIN = IS_PROD ? (process.env.BASE_URL || false) : true;
+app.use(cors({ origin: CORS_ORIGIN }));
+app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/fandoms', express.static(FANDOMS_DIR));
 
@@ -101,8 +105,13 @@ interface PhotoEntry {
 // --- Config helpers ---
 
 function readConfig(): Config {
-  const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-  return JSON.parse(raw);
+  try {
+    const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('[Config] Failed to read fandoms.json:', err);
+    return { fandoms: [] };
+  }
 }
 
 function writeConfig(config: Config): void {
@@ -374,9 +383,14 @@ app.post('/api/admin/login', (req, res) => {
   }
 
   const { email, password } = req.body;
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'email and password required' });
+  }
+  const passwordMatch = ADMIN_PASSWORD.length === password.length &&
+    crypto.timingSafeEqual(Buffer.from(ADMIN_PASSWORD), Buffer.from(password));
   if (
-    email?.toLowerCase() === ADMIN_EMAIL &&
-    password === ADMIN_PASSWORD
+    email.toLowerCase() === ADMIN_EMAIL &&
+    passwordMatch
   ) {
     const token = createSession();
     return res.json({ token });
@@ -447,7 +461,109 @@ function createPlaceholderImage(fandomId: string): string {
   return filename;
 }
 
+// --- Rate limiting (in-memory, kiosk-scale) ---
+
+const uploadRateMap = new Map<string, { count: number; resetAt: number }>();
+const emailRateMap = new Map<string, { count: number; resetAt: number }>();
+const trackRateMap = new Map<string, { count: number; resetAt: number }>();
+const emailCollectRateMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(
+  map: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  max: number,
+  windowMs: number
+): boolean {
+  const now = Date.now();
+  const entry = map.get(key);
+  if (!entry || now > entry.resetAt) {
+    map.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= max) return false;
+  entry.count++;
+  return true;
+}
+
+function clientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function sweepExpiredEntries(): void {
+  const now = Date.now();
+  for (const map of [uploadRateMap, emailRateMap, trackRateMap, emailCollectRateMap, loginRateMap, founderRateMap]) {
+    for (const [key, entry] of map) {
+      if (now > entry.resetAt) map.delete(key);
+    }
+  }
+  for (const [key, data] of reserveTokens) {
+    if (now > data.expiresAt) reserveTokens.delete(key);
+  }
+  for (const [key, data] of pendingEmailVerifications) {
+    if (now > data.expiresAt) pendingEmailVerifications.delete(key);
+  }
+  for (const [key, data] of activeSessions) {
+    if (now > data.expiresAt) activeSessions.delete(key);
+  }
+  for (const [key, ts] of passportViewDebounce) {
+    if (now - ts > 60_000) passportViewDebounce.delete(key);
+  }
+}
+
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const sweepTimer = setInterval(sweepExpiredEntries, SWEEP_INTERVAL_MS);
+
 // --- PUBLIC API ---
+
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+const FOUNDER_REG_URL = process.env.FOUNDER_REG_URL || '';
+const founderRateMap = new Map<string, { count: number; resetAt: number }>();
+
+app.post('/api/founder/register', async (req, res) => {
+  if (!FOUNDER_REG_URL) {
+    return res.status(503).json({ error: 'Founder registration not configured' });
+  }
+
+  const ip = clientIp(req);
+  if (!checkRateLimit(founderRateMap, ip, 5, 10 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+
+  const { firstName, email, fandomName } = req.body;
+  if (!firstName || !email || !fandomName) {
+    return res.status(400).json({ error: 'firstName, email, and fandomName required' });
+  }
+
+  const payload = {
+    firstName: String(firstName).trim().slice(0, 100),
+    lastName: 'Member',
+    email: String(email).trim().slice(0, 200),
+    phone: '',
+    country: 'United States',
+    source: 'Summoning Mirror – Times Square',
+    spend: '',
+    fandoms: [String(fandomName).slice(0, 100)],
+    otherFranchises: '',
+    timestamp: new Date().toISOString(),
+    website: '',
+    pagePath: '/summoning-mirror',
+  };
+
+  try {
+    await fetch(FOUNDER_REG_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Founder] Registration proxy failed:', err);
+    res.status(502).json({ error: 'Registration service unavailable' });
+  }
+});
 
 app.get('/api/fandoms', (_req, res) => {
   const config = readConfig();
@@ -476,6 +592,11 @@ app.get('/api/analytics/fandom/:fandomId', (req, res) => {
 });
 
 app.post('/api/analytics/track', (req, res) => {
+  const ip = clientIp(req);
+  if (!checkRateLimit(trackRateMap, ip, 30, 10 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+
   const { event, fandomId, fandomName } = req.body;
   if (!event || !fandomId) {
     return res.status(400).json({ error: 'event and fandomId required' });
@@ -492,11 +613,8 @@ app.post('/api/analytics/track', (req, res) => {
   data.events.push(entry);
 
   if (event === 'card_generated') {
-    data.totalCards++;
-    if (!data.fandomCounts[fandomId]) {
-      data.fandomCounts[fandomId] = { name: fandomName || fandomId, count: 0 };
-    }
-    data.fandomCounts[fandomId].count++;
+    // Counters incremented atomically by /api/photos/reserve
+    console.log(`[Analytics] card_generated logged for ${fandomId}`);
   } else if (event === 'share') {
     data.totalShares++;
   }
@@ -512,10 +630,15 @@ app.post('/api/analytics/track', (req, res) => {
 
 // --- EMAIL COLLECTION ---
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX = /^[^\s@\r\n]+@[^\s@\r\n]+\.[^\s@\r\n]+$/;
 const MAX_EMAILS = 50000;
 
 app.post('/api/email/collect', (req, res) => {
+  const ip = clientIp(req);
+  if (!checkRateLimit(emailCollectRateMap, ip, 10, 10 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+
   const { email, fandomId, firstName, photoId, wishText, preferredFandom } = req.body;
   if (!email || !EMAIL_REGEX.test(email)) {
     return res.status(400).json({ error: 'Valid email required' });
@@ -556,40 +679,42 @@ app.post('/api/email/collect', (req, res) => {
   res.json({ success: true });
 });
 
-// --- Rate limiting (in-memory, kiosk-scale) ---
-
-const uploadRateMap = new Map<string, { count: number; resetAt: number }>();
-const emailRateMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(
-  map: Map<string, { count: number; resetAt: number }>,
-  key: string,
-  max: number,
-  windowMs: number
-): boolean {
-  const now = Date.now();
-  const entry = map.get(key);
-  if (!entry || now > entry.resetAt) {
-    map.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-  if (entry.count >= max) return false;
-  entry.count++;
-  return true;
-}
-
-function clientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
-  return req.socket.remoteAddress || 'unknown';
-}
-
 // --- PHOTO STORAGE ---
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface ReserveData {
+  id: string;
+  fandomId: string;
+  fandomName: string;
+  serialNumber: string;
+  visitOrdinal: number;
+  fandomOrdinal: number;
+  ugcCode: string;
+  statusTier: string;
+  expiresAt: number;
+}
+
+const reserveTokens = new Map<string, ReserveData>();
+const RESERVE_TOKEN_TTL_MS = 5 * 60 * 1000;
+
+interface PendingEmailVerification {
+  photoId: string;
+  email: string;
+  firstName: string;
+  fandomName: string;
+  expiresAt: number;
+}
+
+const pendingEmailVerifications = new Map<string, PendingEmailVerification>();
+const EMAIL_VERIFY_TTL_MS = 15 * 60 * 1000;
+const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
 
 const cardStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, CARDS_DIR),
   filename: (req, _file, cb) => {
-    const id = (req.body?.photoId as string) || crypto.randomUUID();
+    const photoId = req.body?.photoId as string | undefined;
+    const id = photoId && UUID_RE.test(photoId) ? photoId : crypto.randomUUID();
     cb(null, `${id}.jpg`);
   },
 });
@@ -619,8 +744,29 @@ app.post('/api/photos/reserve', (req, res) => {
   const statusTier = getStatusTier(visitOrdinal);
   const totalFandoms = config.fandoms.filter((f) => f.enabled).length;
 
+  analytics.totalCards++;
+  if (!analytics.fandomCounts[fandomId]) {
+    analytics.fandomCounts[fandomId] = { name: fandomName, count: 0 };
+  }
+  analytics.fandomCounts[fandomId].count++;
+  writeAnalytics(analytics);
+
+  const reserveToken = crypto.randomBytes(16).toString('hex');
+  reserveTokens.set(reserveToken, {
+    id,
+    fandomId,
+    fandomName,
+    serialNumber,
+    visitOrdinal,
+    fandomOrdinal,
+    ugcCode,
+    statusTier,
+    expiresAt: Date.now() + RESERVE_TOKEN_TTL_MS,
+  });
+
   res.json({
     id,
+    reserveToken,
     serialNumber,
     visitOrdinal,
     fandomOrdinal,
@@ -646,30 +792,53 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
 
   const {
     fandomId, fandomName, photoId, guestName, wishText, captureMode,
-    serialNumber, visitOrdinal, fandomOrdinal, ugcCode, statusTier,
+    reserveToken,
   } = req.body;
+
+  if (!reserveToken) {
+    fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'reserveToken required' });
+  }
+
+  const reserve = reserveTokens.get(reserveToken);
+  if (!reserve || Date.now() > reserve.expiresAt) {
+    if (reserve) reserveTokens.delete(reserveToken);
+    fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'Invalid or expired reserve token' });
+  }
 
   if (!fandomId || !fandomName) {
     fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: 'fandomId and fandomName required' });
   }
 
-  const id = photoId || path.basename(req.file.filename, '.jpg');
-  const ordinal = parseInt(visitOrdinal || '0', 10) || readAnalytics().totalCards + 1;
+  if (fandomId !== reserve.fandomId) {
+    fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'fandomId does not match reservation' });
+  }
+
+  const id = (photoId && UUID_RE.test(photoId)) ? photoId : reserve.id;
+  if (id !== reserve.id) {
+    fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'photoId does not match reservation' });
+  }
+
+  // Delete token only after all validation passes so it can be retried on non-token failures
+  reserveTokens.delete(reserveToken);
 
   const entry: PhotoEntry = {
     id,
     filename: req.file.filename,
-    fandomId,
-    fandomName,
-    guestName: guestName?.trim() || undefined,
-    wishText: wishText?.trim() || undefined,
+    fandomId: reserve.fandomId,
+    fandomName: reserve.fandomName,
+    guestName: guestName ? String(guestName).trim().slice(0, 50) : undefined,
+    wishText: wishText ? String(wishText).trim().slice(0, 120) : undefined,
     captureMode: captureMode || 'solo',
-    serialNumber: serialNumber || formatSerialNumber(ordinal),
-    visitOrdinal: ordinal,
-    fandomOrdinal: parseInt(fandomOrdinal || '1', 10),
-    ugcCode: ugcCode || generateUgcCode(ordinal),
-    statusTier: statusTier || getStatusTier(ordinal),
+    serialNumber: reserve.serialNumber,
+    visitOrdinal: reserve.visitOrdinal,
+    fandomOrdinal: reserve.fandomOrdinal,
+    ugcCode: reserve.ugcCode,
+    statusTier: reserve.statusTier,
     lifecycleDaysSent: [],
     passportViews: 0,
     createdAt: new Date().toISOString(),
@@ -703,8 +872,15 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
   });
 });
 
+const passportViewDebounce = new Map<string, number>();
+
 app.get('/api/photos/:id/passport', (req, res) => {
-  const photo = getPhotoById(req.params.id);
+  const id = req.params.id;
+  if (!UUID_RE.test(id)) {
+    return res.status(400).json({ error: 'Invalid photo ID' });
+  }
+
+  const photo = getPhotoById(id);
   if (!photo) {
     return res.status(404).json({ error: 'Photo not found' });
   }
@@ -713,11 +889,16 @@ app.get('/api/photos/:id/passport', (req, res) => {
   const config = readConfig();
   const fandomInfo = analytics.fandomCounts[photo.fandomId];
 
-  const photos = readPhotos();
-  const idx = photos.findIndex((p) => p.id === photo.id);
-  if (idx !== -1) {
-    photos[idx].passportViews = (photos[idx].passportViews || 0) + 1;
-    writePhotos(photos);
+  const now = Date.now();
+  const lastView = passportViewDebounce.get(id) || 0;
+  if (now - lastView > 10_000) {
+    passportViewDebounce.set(id, now);
+    const photos = readPhotos();
+    const idx = photos.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      photos[idx].passportViews = (photos[idx].passportViews || 0) + 1;
+      writePhotos(photos);
+    }
   }
 
   res.json({
@@ -740,6 +921,9 @@ app.get('/api/photos/:id/passport', (req, res) => {
 });
 
 app.get('/api/photos/:id/image', (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid photo ID' });
+  }
   const photo = getPhotoById(req.params.id);
   if (!photo) {
     return res.status(404).json({ error: 'Photo not found' });
@@ -755,7 +939,46 @@ app.get('/api/photos/:id/image', (req, res) => {
   res.sendFile(filePath);
 });
 
+async function sendPhotoCardEmail(
+  photo: PhotoEntry,
+  email: string,
+  firstName: string,
+  displayFandom: string
+): Promise<void> {
+  const filePath = getPhotoFilePath(photo);
+  await smtpTransport.sendMail({
+    from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+    to: email,
+    subject: 'Your Summoning Mirror Card — House of Spells NYC',
+    html: buildPhotoEmailHtml(
+      firstName,
+      displayFandom,
+      getPassportUrl(photo.id),
+      photo.ugcCode || generateUgcCode(photo.visitOrdinal || 1),
+      photo.statusTier || getStatusTier(photo.visitOrdinal || 1)
+    ),
+    attachments: [{
+      filename: 'SummoningMirror_HouseOfSpells.jpg',
+      path: filePath,
+      cid: 'summoning-card',
+    }],
+  });
+
+  const photos = readPhotos();
+  const idx = photos.findIndex((p) => p.id === photo.id);
+  if (idx !== -1) {
+    photos[idx].email = email;
+    photos[idx].firstName = firstName;
+    photos[idx].lifecycleDaysSent = [0];
+    writePhotos(photos);
+  }
+}
+
 app.post('/api/photos/:id/email', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid photo ID' });
+  }
+
   const ip = clientIp(req);
   if (!checkRateLimit(emailRateMap, ip, 10, 60 * 60 * 1000)) {
     return res.status(429).json({ error: 'Email rate limit exceeded' });
@@ -766,8 +989,8 @@ app.post('/api/photos/:id/email', async (req, res) => {
   if (!email || !EMAIL_REGEX.test(email)) {
     return res.status(400).json({ error: 'Valid email required' });
   }
-  if (!firstName?.trim()) {
-    return res.status(400).json({ error: 'firstName required' });
+  if (!firstName?.trim() || String(firstName).trim().length > 50) {
+    return res.status(400).json({ error: 'firstName required (max 50 chars)' });
   }
 
   if (!SMTP_USER || !process.env.SMTP_PASS) {
@@ -796,37 +1019,83 @@ app.post('/api/photos/:id/email', async (req, res) => {
   const displayFandom = fandomName || photo.fandomName;
   const safeName = firstName.trim();
 
-  try {
-    await smtpTransport.sendMail({
-      from: `"${SMTP_FROM}" <${SMTP_USER}>`,
-      to: email,
-      subject: 'Your Summoning Mirror Card — House of Spells NYC',
-      html: buildPhotoEmailHtml(
-        safeName,
-        displayFandom,
-        getPassportUrl(photo.id),
-        photo.ugcCode || generateUgcCode(photo.visitOrdinal || 1),
-        photo.statusTier || getStatusTier(photo.visitOrdinal || 1)
-      ),
-      attachments: [{
-        filename: 'SummoningMirror_HouseOfSpells.jpg',
-        path: filePath,
-        cid: 'summoning-card',
-      }],
+  if (REQUIRE_EMAIL_VERIFICATION) {
+    const verifyToken = crypto.randomBytes(16).toString('hex');
+    pendingEmailVerifications.set(verifyToken, {
+      photoId: photo.id,
+      email,
+      firstName: safeName,
+      fandomName: displayFandom,
+      expiresAt: Date.now() + EMAIL_VERIFY_TTL_MS,
     });
 
-    const photos = readPhotos();
-    const idx = photos.findIndex((p) => p.id === photo.id);
-    if (idx !== -1) {
-      photos[idx].email = email;
-      photos[idx].firstName = safeName;
-      photos[idx].lifecycleDaysSent = [0];
-      writePhotos(photos);
+    const verifyUrl = `${BASE_URL}/api/email/verify/${verifyToken}`;
+    try {
+      await smtpTransport.sendMail({
+        from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+        to: email,
+        subject: 'Verify your email — Summoning Mirror',
+        html: `<p>Hi ${escapeHtml(safeName)},</p>
+<p>Click the link below to confirm your email and receive your ${escapeHtml(displayFandom)} fan card:</p>
+<p><a href="${escapeHtml(verifyUrl)}">${escapeHtml(verifyUrl)}</a></p>
+<p>This link expires in 15 minutes.</p>
+<p style="color:#888;font-size:12px;">House of Spells NYC — The Summoning Mirror</p>`,
+      });
+    } catch (err) {
+      pendingEmailVerifications.delete(verifyToken);
+      console.error('[Email] Failed to send verification email:', err);
+      return res.status(500).json({ error: 'Failed to send verification email' });
     }
 
+    return res.json({ success: true, needsVerification: true });
+  }
+
+  try {
+    await sendPhotoCardEmail(photo, email, safeName, displayFandom);
     res.json({ success: true });
   } catch (err) {
     console.error('[Email] Failed to send photo card:', err);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
+app.get('/api/email/verify/:token', async (req, res) => {
+  const pending = pendingEmailVerifications.get(req.params.token);
+  if (!pending || Date.now() > pending.expiresAt) {
+    if (pending) pendingEmailVerifications.delete(req.params.token);
+    return res.status(400).json({ error: 'Invalid or expired verification link' });
+  }
+
+  if (!SMTP_USER || !process.env.SMTP_PASS) {
+    return res.status(503).json({ error: 'Email service not configured' });
+  }
+
+  const photo = getPhotoById(pending.photoId);
+  if (!photo) {
+    return res.status(404).json({ error: 'Photo not found' });
+  }
+
+  if (photo.email) {
+    pendingEmailVerifications.delete(req.params.token);
+    return res.status(409).json({ error: 'Card already emailed for this photo' });
+  }
+
+  const filePath = getPhotoFilePath(photo);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Image file missing' });
+  }
+
+  try {
+    await sendPhotoCardEmail(
+      photo,
+      pending.email,
+      pending.firstName,
+      pending.fandomName
+    );
+    pendingEmailVerifications.delete(req.params.token);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Email] Failed to send verified photo card:', err);
     res.status(500).json({ error: 'Failed to send email' });
   }
 });
@@ -1014,7 +1283,56 @@ adminRouter.post('/fandoms/:id/image', fandomImageUpload.single('image'), (req, 
   res.json({ success: true, filename: req.file.filename });
 });
 
+adminRouter.get('/emails', (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || '50', 10)));
+  const emails = readEmails();
+  const start = (page - 1) * limit;
+  const slice = emails.slice(start, start + limit);
+  res.json({
+    emails: slice,
+    page,
+    limit,
+    total: emails.length,
+    totalPages: Math.ceil(emails.length / limit),
+  });
+});
+
+adminRouter.delete('/emails/:email', (req, res) => {
+  const targetEmail = decodeURIComponent(req.params.email).toLowerCase();
+  const emails = readEmails();
+  const before = emails.length;
+  const filtered = emails.filter((e) => e.email.toLowerCase() !== targetEmail);
+  writeEmails(filtered);
+
+  const photos = readPhotos();
+  let photosChanged = false;
+  for (const photo of photos) {
+    if (photo.email?.toLowerCase() === targetEmail) {
+      delete photo.email;
+      photosChanged = true;
+    }
+  }
+  if (photosChanged) writePhotos(photos);
+
+  res.json({ success: true, deleted: before - filtered.length });
+});
+
+adminRouter.get('/gdpr/export/:email', (req, res) => {
+  const targetEmail = decodeURIComponent(req.params.email).toLowerCase();
+  const emails = readEmails().filter((e) => e.email.toLowerCase() === targetEmail);
+  const photos = readPhotos().filter((p) => p.email?.toLowerCase() === targetEmail);
+  res.json({ email: targetEmail, emails, photos });
+});
+
 app.use('/api/admin', adminRouter);
+
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[Express] Unhandled error:', err.message);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // In production, serve the Vite build output
 if (IS_PROD && fs.existsSync(DIST_DIR)) {
@@ -1033,7 +1351,7 @@ try {
   console.log('[Config] Could not watch fandoms.json');
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n  Summoning Mirror API running at http://localhost:${PORT}`);
   console.log(`  Fandoms config: ${CONFIG_PATH}`);
   console.log(`  Analytics: ${ANALYTICS_PATH}`);
@@ -1046,6 +1364,7 @@ app.listen(PORT, () => {
 
 // --- Email lifecycle scheduler (day 1, 3, 7, 30 follow-ups) ---
 
+const IS_LIFECYCLE_WORKER = process.env.LIFECYCLE_WORKER !== 'false';
 const LIFECYCLE_DAYS = [1, 3, 7, 30];
 const LIFECYCLE_CHECK_MS = 30 * 60 * 1000;
 
@@ -1097,11 +1416,36 @@ async function processLifecycleEmails(): Promise<void> {
   if (changed) writePhotos(photos);
 }
 
-setInterval(() => {
-  processLifecycleEmails().catch((err) => console.error('[Lifecycle] Error:', err));
-}, LIFECYCLE_CHECK_MS);
+if (IS_LIFECYCLE_WORKER) {
+  setInterval(() => {
+    processLifecycleEmails().catch((err) => console.error('[Lifecycle] Error:', err));
+  }, LIFECYCLE_CHECK_MS);
+}
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[WARN] Unhandled promise rejection:', reason);
+});
 
 process.on('SIGTERM', () => {
+  console.log('[Shutdown] SIGTERM received, draining...');
+  clearInterval(sweepTimer);
   configWatcher?.close();
-  process.exit(0);
+  server.close(() => {
+    console.log('[Shutdown] HTTP server closed');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error('[Shutdown] Forced exit after 10s');
+    process.exit(1);
+  }, 10_000).unref();
+});
+
+process.on('SIGINT', () => {
+  console.log('[Shutdown] SIGINT received');
+  process.kill(process.pid, 'SIGTERM');
 });

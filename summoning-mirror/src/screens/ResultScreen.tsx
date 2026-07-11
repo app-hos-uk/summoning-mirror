@@ -5,7 +5,6 @@ import type { Fandom, Lang, CaptureMode } from '../types/fandom';
 import type { PhotoReserve, StatusTier } from '../types/loyalty';
 import { BRAND, getShareTextForFandom } from '../utils/branding';
 import { getFounderRegisterUrl } from '../utils/loyalty';
-import { getPassportUrl } from '../utils/loyaltyTiers';
 import { t } from '../utils/i18n';
 import { compositeImage } from '../utils/compositor';
 import {
@@ -21,7 +20,6 @@ import {
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { playRevealSound } from '../utils/sounds';
 import {
-  trackCardGenerated,
   trackShare,
   reservePhoto,
   uploadPhoto,
@@ -103,9 +101,7 @@ export default function ResultScreen({
         setPhotoReserve(reserve);
       }
 
-      const passportUrl = reserve
-        ? reserve.passportUrl
-        : getPassportUrl(crypto.randomUUID());
+      const passportUrl = reserve ? reserve.passportUrl : '';
 
       let qrDataUrl = '';
       try {
@@ -151,13 +147,13 @@ export default function ResultScreen({
       }
 
       setCompositing(false);
-      trackCardGenerated(fandom.id, fandom.displayName);
 
       if (canvasRef.current && reserve && !cancelled) {
         try {
           const blob = await canvasToUploadBlob(canvasRef.current);
           await uploadPhoto(blob, fandom.id, fandom.displayName, {
             photoId: reserve.id,
+            reserveToken: reserve.reserveToken,
             guestName: guestName || undefined,
             wishText: wishText || undefined,
             captureMode,

@@ -9,7 +9,7 @@ import AnalyticsDashboard from './admin/AnalyticsDashboard';
 import PassportPage from './screens/PassportPage';
 import AdminLogin from './admin/AdminLogin';
 import { BRAND } from './utils/branding';
-import { getAdminToken, clearAdminToken, adminHeaders } from './utils/adminAuth';
+import { getAdminToken, setAdminToken, clearAdminToken, adminHeaders } from './utils/adminAuth';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
@@ -55,7 +55,7 @@ export default function App() {
   }, [needsAuth]);
 
   const handleAdminLogin = useCallback((token: string) => {
-    sessionStorage.setItem('admin_token', token);
+    setAdminToken(token);
     setAdminAuthed(true);
   }, []);
 

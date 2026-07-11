@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
     "dev:client": "vite",
@@ -16,6 +19,7 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "helmet": "^8.2.0",
     "lucide-react": "^1.24.0",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
@@ -23,12 +27,14 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-webcam": "^7.2.0",
+    "tsx": "^4.23.0",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/helmet": "^0.0.48",
     "@types/multer": "^2.2.0",
     "@types/node": "^24.13.2",
     "@types/nodemailer": "^8.0.1",
@@ -40,7 +46,6 @@
     "concurrently": "^9.2.4",
     "oxlint": "^1.71.0",
     "tailwindcss": "^4.3.2",
-    "tsx": "^4.23.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   }

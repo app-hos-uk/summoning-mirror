@@ -11,18 +11,6 @@ export function formatSerialNumber(ordinal: number): string {
   return `HOS-NYC-${String(ordinal).padStart(5, '0')}`;
 }
 
-export function generateUgcCode(ordinal: number): string {
-  const base = ordinal.toString(36).toUpperCase().padStart(4, '0');
-  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `HOS-${base}${rand}`;
-}
-
-export function getPassportUrl(photoId: string, origin?: string): string {
-  const base = origin
-    || (typeof window !== 'undefined' ? window.location.origin : 'https://houseofspells.com');
-  return `${base}/card/${photoId}`;
-}
-
 const TIER_LABELS: Record<StatusTier, Record<Lang, string>> = {
   pioneer: {
     en: 'Pioneer Fan',
