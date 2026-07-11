@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Plus, Trash2, Edit3, Save, X, Eye, EyeOff, ArrowUp, ArrowDown, Upload, LogOut } from 'lucide-react';
+import { Plus, Trash2, Edit3, Save, X, Eye, EyeOff, ArrowUp, ArrowDown, Upload, LogOut, Lock } from 'lucide-react';
 import { useAllFandoms } from '../hooks/useFandoms';
 import type { Fandom } from '../types/fandom';
 import { BRAND } from '../utils/branding';
@@ -27,6 +27,9 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwLoading, setPwLoading] = useState(false);
 
   const showMessage = useCallback((msg: string) => {
     setMessage(msg);
@@ -171,6 +174,45 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   const isLocked = (fandom: Fandom) => {
     return Object.values(LOCKED_POSITIONS).includes(fandom.id);
+  };
+
+  const handleChangePassword = async () => {
+    if (!pwForm.currentPassword || !pwForm.newPassword) {
+      showMessage('All password fields are required');
+      return;
+    }
+    if (pwForm.newPassword.length < 8) {
+      showMessage('New password must be at least 8 characters');
+      return;
+    }
+    if (pwForm.newPassword !== pwForm.confirmPassword) {
+      showMessage('New passwords do not match');
+      return;
+    }
+    setPwLoading(true);
+    try {
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: adminJsonHeaders(),
+        body: JSON.stringify({
+          currentPassword: pwForm.currentPassword,
+          newPassword: pwForm.newPassword,
+        }),
+      });
+      if (!guardAdminResponse(res)) return;
+      if (!res.ok) {
+        const err = await res.json();
+        showMessage(err.error || 'Failed to change password');
+        return;
+      }
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordChange(false);
+      showMessage('Password changed successfully!');
+    } catch {
+      showMessage('Network error');
+    } finally {
+      setPwLoading(false);
+    }
   };
 
   if (loading) {
@@ -399,8 +441,99 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           }}
         />
 
+        {/* Change Password */}
+        <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(197,165,90,0.1)' }}>
+          {!showPasswordChange ? (
+            <button
+              onClick={() => setShowPasswordChange(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded border cursor-pointer transition-all hover:scale-105 text-sm tracking-wider"
+              style={{
+                borderColor: 'rgba(197,165,90,0.3)',
+                color: 'rgba(197,165,90,0.6)',
+              }}>
+              <Lock size={16} />
+              CHANGE PASSWORD
+            </button>
+          ) : (
+            <div className="p-4 md:p-6 rounded-lg border"
+              style={{
+                borderColor: 'rgba(197,165,90,0.3)',
+                backgroundColor: 'rgba(197,165,90,0.03)',
+              }}>
+              <h3 className="text-sm font-bold tracking-wider mb-4"
+                style={{ color: BRAND.colors.gold }}>
+                CHANGE PASSWORD
+              </h3>
+              <div className="space-y-3 max-w-sm">
+                <input
+                  type="password"
+                  placeholder="Current Password"
+                  value={pwForm.currentPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, currentPassword: e.target.value })}
+                  autoComplete="current-password"
+                  className="w-full px-3 py-2 rounded border text-sm outline-none"
+                  style={{
+                    backgroundColor: 'rgba(197,165,90,0.05)',
+                    borderColor: 'rgba(197,165,90,0.2)',
+                    color: 'white',
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="New Password (min 8 characters)"
+                  value={pwForm.newPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })}
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2 rounded border text-sm outline-none"
+                  style={{
+                    backgroundColor: 'rgba(197,165,90,0.05)',
+                    borderColor: 'rgba(197,165,90,0.2)',
+                    color: 'white',
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm New Password"
+                  value={pwForm.confirmPassword}
+                  onChange={(e) => setPwForm({ ...pwForm, confirmPassword: e.target.value })}
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2 rounded border text-sm outline-none"
+                  style={{
+                    backgroundColor: 'rgba(197,165,90,0.05)',
+                    borderColor: 'rgba(197,165,90,0.2)',
+                    color: 'white',
+                  }}
+                />
+              </div>
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={handleChangePassword}
+                  disabled={pwLoading}
+                  className="flex items-center gap-2 px-4 py-2 rounded border cursor-pointer text-sm tracking-wider disabled:opacity-50"
+                  style={{ borderColor: BRAND.colors.gold, color: BRAND.colors.gold }}>
+                  {pwLoading ? (
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  UPDATE PASSWORD
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPasswordChange(false);
+                    setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded border cursor-pointer text-sm tracking-wider"
+                  style={{ borderColor: 'rgba(197,165,90,0.3)', color: 'rgba(197,165,90,0.5)' }}>
+                  <X size={16} /> CANCEL
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Navigation */}
-        <div className="mt-8 pt-6 flex gap-6 justify-center"
+        <div className="mt-6 pt-6 flex gap-6 justify-center"
           style={{ borderTop: '1px solid rgba(197,165,90,0.1)' }}>
           <a href="/admin/analytics"
             className="text-sm tracking-wider transition-opacity hover:opacity-100 opacity-60"

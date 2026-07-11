@@ -383,7 +383,57 @@ function buildLifecycleEmailHtml(
 // --- Admin Auth ---
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@houseofspells.com').toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PROD ? '' : 'Admin@1234');
+const ENV_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PROD ? '' : 'Admin@1234');
+const ADMIN_PW_PATH = path.join(DATA_DIR, 'admin-password.json');
+const MIN_PASSWORD_LENGTH = 8;
+
+interface StoredPassword {
+  hash: string;
+  salt: string;
+  updatedAt: string;
+}
+
+function hashPassword(password: string, salt?: string): { hash: string; salt: string } {
+  const s = salt || crypto.randomBytes(32).toString('hex');
+  const derived = crypto.scryptSync(password, s, 64).toString('hex');
+  return { hash: derived, salt: s };
+}
+
+function verifyPassword(password: string, stored: StoredPassword): boolean {
+  const { hash } = hashPassword(password, stored.salt);
+  if (hash.length !== stored.hash.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(stored.hash));
+}
+
+function loadStoredPassword(): StoredPassword | null {
+  try {
+    if (fs.existsSync(ADMIN_PW_PATH)) {
+      return JSON.parse(fs.readFileSync(ADMIN_PW_PATH, 'utf-8'));
+    }
+  } catch { /* corrupt file, fall through */ }
+  return null;
+}
+
+function saveStoredPassword(password: string): StoredPassword {
+  const { hash, salt } = hashPassword(password);
+  const stored: StoredPassword = { hash, salt, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(ADMIN_PW_PATH, JSON.stringify(stored, null, 2), 'utf-8');
+  return stored;
+}
+
+// On first run, seed the password hash from the env var
+let storedPassword = loadStoredPassword();
+if (!storedPassword && ENV_ADMIN_PASSWORD) {
+  storedPassword = saveStoredPassword(ENV_ADMIN_PASSWORD);
+  console.log('[Auth] Seeded admin password hash from environment variable');
+}
+
+function checkAdminPassword(password: string): boolean {
+  if (storedPassword) return verifyPassword(password, storedPassword);
+  if (!ENV_ADMIN_PASSWORD) return false;
+  return ENV_ADMIN_PASSWORD.length === password.length &&
+    crypto.timingSafeEqual(Buffer.from(ENV_ADMIN_PASSWORD), Buffer.from(password));
+}
 
 const activeSessions = new Map<string, { expiresAt: number }>();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -406,10 +456,13 @@ function isValidSession(token: string | undefined): boolean {
   return true;
 }
 
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+function extractToken(req: Request): string | undefined {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-  if (!isValidSession(token)) {
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!isValidSession(extractToken(req))) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -422,7 +475,7 @@ app.post('/api/admin/login', (req, res) => {
     return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
   }
 
-  if (!ADMIN_PASSWORD) {
+  if (!storedPassword && !ENV_ADMIN_PASSWORD) {
     return res.status(503).json({ error: 'Admin access not configured' });
   }
 
@@ -430,12 +483,8 @@ app.post('/api/admin/login', (req, res) => {
   if (typeof email !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'email and password required' });
   }
-  const passwordMatch = ADMIN_PASSWORD.length === password.length &&
-    crypto.timingSafeEqual(Buffer.from(ADMIN_PASSWORD), Buffer.from(password));
-  if (
-    email.toLowerCase() === ADMIN_EMAIL &&
-    passwordMatch
-  ) {
+
+  if (email.toLowerCase() === ADMIN_EMAIL && checkAdminPassword(password)) {
     const token = createSession();
     return res.json({ token });
   }
@@ -443,16 +492,47 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 app.post('/api/admin/logout', (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const token = extractToken(req);
   if (token) activeSessions.delete(token);
   res.json({ success: true });
 });
 
 app.get('/api/admin/session', (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-  res.json({ valid: isValidSession(token) });
+  res.json({ valid: isValidSession(extractToken(req)) });
+});
+
+app.post('/api/admin/change-password', (req, res) => {
+  const callerToken = extractToken(req);
+  if (!isValidSession(callerToken)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { currentPassword, newPassword } = req.body;
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    return res.status(400).json({ error: 'currentPassword and newPassword required' });
+  }
+
+  if (!checkAdminPassword(currentPassword)) {
+    return res.status(403).json({ error: 'Current password is incorrect' });
+  }
+
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  }
+
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ error: 'New password must be different from current password' });
+  }
+
+  storedPassword = saveStoredPassword(newPassword);
+
+  // Invalidate all sessions except the caller's
+  for (const [t] of activeSessions) {
+    if (t !== callerToken) activeSessions.delete(t);
+  }
+
+  console.log('[Auth] Admin password changed successfully');
+  res.json({ success: true });
 });
 
 // --- Constants ---
