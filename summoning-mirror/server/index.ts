@@ -84,6 +84,7 @@ interface EmailEntry {
 interface PhotoEntry {
   id: string;
   filename: string;
+  emailCardFilename?: string;
   fandomId: string;
   fandomName: string;
   guestName?: string;
@@ -167,6 +168,16 @@ function getPhotoById(id: string): PhotoEntry | undefined {
 
 function getPhotoFilePath(photo: PhotoEntry): string {
   return path.join(CARDS_DIR, photo.filename);
+}
+
+function deletePhotoFiles(photo: PhotoEntry): void {
+  const paths = [getPhotoFilePath(photo)];
+  if (photo.emailCardFilename) {
+    paths.push(path.join(CARDS_DIR, photo.emailCardFilename));
+  }
+  for (const filePath of paths) {
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch { /* ignore */ }
+  }
 }
 
 // --- Email transport (configure via env vars) ---
@@ -712,18 +723,22 @@ const REQUIRE_EMAIL_VERIFICATION = process.env.REQUIRE_EMAIL_VERIFICATION === 't
 
 const cardStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, CARDS_DIR),
-  filename: (req, _file, cb) => {
+  filename: (req, file, cb) => {
     const photoId = req.body?.photoId as string | undefined;
     const id = photoId && UUID_RE.test(photoId) ? photoId : crypto.randomUUID();
-    cb(null, `${id}.jpg`);
+    const ext = file.mimetype === 'image/png' ? '.png' : '.jpg';
+    const suffix = file.fieldname === 'emailCard' ? '_email' : '';
+    cb(null, `${id}${suffix}${ext}`);
   },
 });
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
 const cardUpload = multer({
   storage: cardStorage,
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    cb(null, file.mimetype === 'image/jpeg');
+    cb(null, ALLOWED_IMAGE_TYPES.includes(file.mimetype));
   },
 });
 
@@ -779,15 +794,24 @@ app.post('/api/photos/reserve', (req, res) => {
   });
 });
 
-app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
+app.post('/api/photos/upload', cardUpload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'emailCard', maxCount: 1 },
+]), (req, res) => {
+  const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+  const mainFile = files?.image?.[0];
+  const emailFile = files?.emailCard?.[0];
+
   const ip = clientIp(req);
   if (!checkRateLimit(uploadRateMap, ip, 60, 60 * 60 * 1000)) {
-    if (req.file) fs.unlinkSync(req.file.path);
+    if (mainFile) fs.unlinkSync(mainFile.path);
+    if (emailFile) fs.unlinkSync(emailFile.path);
     return res.status(429).json({ error: 'Upload rate limit exceeded' });
   }
 
-  if (!req.file) {
-    return res.status(400).json({ error: 'JPEG image required' });
+  if (!mainFile) {
+    if (emailFile) fs.unlinkSync(emailFile.path);
+    return res.status(400).json({ error: 'Card image required' });
   }
 
   const {
@@ -795,31 +819,36 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
     reserveToken,
   } = req.body;
 
+  const cleanupFiles = () => {
+    if (mainFile) try { fs.unlinkSync(mainFile.path); } catch { /* ignore */ }
+    if (emailFile) try { fs.unlinkSync(emailFile.path); } catch { /* ignore */ }
+  };
+
   if (!reserveToken) {
-    fs.unlinkSync(req.file.path);
+    cleanupFiles();
     return res.status(400).json({ error: 'reserveToken required' });
   }
 
   const reserve = reserveTokens.get(reserveToken);
   if (!reserve || Date.now() > reserve.expiresAt) {
     if (reserve) reserveTokens.delete(reserveToken);
-    fs.unlinkSync(req.file.path);
+    cleanupFiles();
     return res.status(400).json({ error: 'Invalid or expired reserve token' });
   }
 
   if (!fandomId || !fandomName) {
-    fs.unlinkSync(req.file.path);
+    cleanupFiles();
     return res.status(400).json({ error: 'fandomId and fandomName required' });
   }
 
   if (fandomId !== reserve.fandomId) {
-    fs.unlinkSync(req.file.path);
+    cleanupFiles();
     return res.status(400).json({ error: 'fandomId does not match reservation' });
   }
 
   const id = (photoId && UUID_RE.test(photoId)) ? photoId : reserve.id;
   if (id !== reserve.id) {
-    fs.unlinkSync(req.file.path);
+    cleanupFiles();
     return res.status(400).json({ error: 'photoId does not match reservation' });
   }
 
@@ -828,7 +857,8 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
 
   const entry: PhotoEntry = {
     id,
-    filename: req.file.filename,
+    filename: mainFile.filename,
+    emailCardFilename: emailFile?.filename,
     fandomId: reserve.fandomId,
     fandomName: reserve.fandomName,
     guestName: guestName ? String(guestName).trim().slice(0, 50) : undefined,
@@ -856,8 +886,7 @@ app.post('/api/photos/upload', cardUpload.single('image'), (req, res) => {
   if (photos.length > 5000) {
     const removed = photos.splice(0, photos.length - 5000);
     for (const old of removed) {
-      const oldPath = getPhotoFilePath(old);
-      try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); } catch { /* ignore */ }
+      deletePhotoFiles(old);
     }
   }
 
@@ -945,7 +974,29 @@ async function sendPhotoCardEmail(
   firstName: string,
   displayFandom: string
 ): Promise<void> {
-  const filePath = getPhotoFilePath(photo);
+  const attachments: Array<{ filename: string; path: string; cid: string }> = [];
+
+  if (photo.emailCardFilename) {
+    const emailCardPath = path.join(CARDS_DIR, photo.emailCardFilename);
+    if (fs.existsSync(emailCardPath)) {
+      const ext = path.extname(photo.emailCardFilename).slice(1) || 'png';
+      attachments.push({
+        filename: `SummoningMirror_HouseOfSpells.${ext}`,
+        path: emailCardPath,
+        cid: 'summoning-card',
+      });
+    }
+  }
+
+  if (attachments.length === 0) {
+    const filePath = getPhotoFilePath(photo);
+    attachments.push({
+      filename: 'SummoningMirror_HouseOfSpells.jpg',
+      path: filePath,
+      cid: 'summoning-card',
+    });
+  }
+
   await smtpTransport.sendMail({
     from: `"${SMTP_FROM}" <${SMTP_USER}>`,
     to: email,
@@ -957,11 +1008,7 @@ async function sendPhotoCardEmail(
       photo.ugcCode || generateUgcCode(photo.visitOrdinal || 1),
       photo.statusTier || getStatusTier(photo.visitOrdinal || 1)
     ),
-    attachments: [{
-      filename: 'SummoningMirror_HouseOfSpells.jpg',
-      path: filePath,
-      cid: 'summoning-card',
-    }],
+    attachments,
   });
 
   const photos = readPhotos();

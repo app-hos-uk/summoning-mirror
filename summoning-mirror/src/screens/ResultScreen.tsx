@@ -1,22 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { Share2, Download, RefreshCw, Crown } from 'lucide-react';
-import QRCode from 'qrcode';
+import { Share2, Download, RefreshCw, Crown, Mail } from 'lucide-react';
 import type { Fandom, Lang, CaptureMode } from '../types/fandom';
 import type { PhotoReserve, StatusTier } from '../types/loyalty';
 import { BRAND, getShareTextForFandom } from '../utils/branding';
 import { getFounderRegisterUrl } from '../utils/loyalty';
 import { t } from '../utils/i18n';
-import { compositeImage } from '../utils/compositor';
-import {
-  shareImage,
-  saveImage,
-  shareToInstagram,
-  shareToTikTok,
-  shareToWhatsApp,
-  shareToTwitter,
-  canvasToUploadBlob,
-  type ShareResult,
-} from '../utils/share';
 import { useInactivityTimer } from '../hooks/useInactivityTimer';
 import { playRevealSound } from '../utils/sounds';
 import {
@@ -24,6 +12,8 @@ import {
   reservePhoto,
   uploadPhoto,
 } from '../hooks/useAnalytics';
+import SelfieCard, { type CardVariant } from '../components/SelfieCard';
+import { cardElementToPngBlob, downloadBlob, shareCardBlob } from '../utils/cardExport';
 import FanCounter from '../components/FanCounter';
 import EmailCapture from '../components/EmailCapture';
 import ShareToEarnBanner from '../components/ShareToEarnBanner';
@@ -52,19 +42,23 @@ export default function ResultScreen({
   lang,
   captureMode,
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const card1ARef = useRef<HTMLDivElement>(null);
+  const card1DRef = useRef<HTMLDivElement>(null);
+  const [selectedVariant, setSelectedVariant] = useState<CardVariant>('midnight-foil');
   const [shareHint, setShareHint] = useState('');
-  const [compositing, setCompositing] = useState(true);
+  const [cardsReady, setCardsReady] = useState(false);
   const [showPrideBanner, setShowPrideBanner] = useState(false);
   const [cardRevealed, setCardRevealed] = useState(false);
   const [interactionReady, setInteractionReady] = useState(false);
   const [photoReserve, setPhotoReserve] = useState<PhotoReserve | null>(null);
+  const [selfieDataUrl, setSelfieDataUrl] = useState('');
+  const [exporting, setExporting] = useState(false);
   const i = t(lang);
   const isGroup = captureMode === 'group';
   const shareText = getShareTextForFandom(fandom.displayName, isGroup);
 
   useEffect(() => {
-    const guard = setTimeout(() => setInteractionReady(true), 5000);
+    const guard = setTimeout(() => setInteractionReady(true), 3000);
     return () => clearTimeout(guard);
   }, []);
 
@@ -75,230 +69,195 @@ export default function ResultScreen({
 
   useInactivityTimer(onReset, 300_000, cardRevealed, 3_000);
 
-  const loadImage = useCallback((src: string, required = false): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => {
-        if (required) reject(new Error(`Failed to load: ${src}`));
-        else resolve(img);
-      };
-      img.src = src;
-    });
-  }, []);
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = photoSnapshot.width;
+    canvas.height = photoSnapshot.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(photoSnapshot, 0, 0);
+    setSelfieDataUrl(canvas.toDataURL('image/jpeg', 0.92));
+  }, [photoSnapshot]);
 
   useEffect(() => {
     let cancelled = false;
-
-    async function render() {
-      if (!canvasRef.current) return;
-
+    async function init() {
       const reserve = await reservePhoto(fandom.id, fandom.displayName);
       if (cancelled) return;
+      if (reserve) setPhotoReserve(reserve);
 
-      if (reserve) {
-        setPhotoReserve(reserve);
-      }
-
-      const passportUrl = reserve ? reserve.passportUrl : '';
-
-      let qrDataUrl = '';
-      try {
-        qrDataUrl = await QRCode.toDataURL(passportUrl, {
-          width: 200,
-          margin: 1,
-          color: { dark: '#0C1428', light: '#FFFFFF' },
-        });
-      } catch { /* QR generation failed, continue without */ }
-
-      const [emblem, emblemCircle, wordogram, stripImage, qrImage] = await Promise.all([
-        loadImage(BRAND.assets.emblem),
-        loadImage(BRAND.assets.emblemCircle),
-        loadImage(BRAND.assets.wordogram),
-        loadImage(`/fandoms/${fandom.stripImage}`, true).catch(() => new Image()),
-        qrDataUrl ? loadImage(qrDataUrl) : Promise.resolve(new Image()),
-      ]);
-
-      if (cancelled) return;
-
-      const visitDate = new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-
-      try {
-        compositeImage(
-          canvasRef.current,
-          photoSnapshot,
-          fandom,
-          wishText,
-          { emblem, emblemCircle, wordogram, stripImage, qrImage },
-          {
-            guestName: guestName || undefined,
-            serialNumber: reserve?.serialNumber,
-            visitDate,
-            isGroup,
-          }
-        );
-      } catch (err) {
-        console.error('Compositing failed:', err);
-      }
-
-      setCompositing(false);
-
-      if (canvasRef.current && reserve && !cancelled) {
-        try {
-          const blob = await canvasToUploadBlob(canvasRef.current);
-          await uploadPhoto(blob, fandom.id, fandom.displayName, {
-            photoId: reserve.id,
-            reserveToken: reserve.reserveToken,
-            guestName: guestName || undefined,
-            wishText: wishText || undefined,
-            captureMode,
-            serialNumber: reserve.serialNumber,
-            visitOrdinal: reserve.visitOrdinal,
-            fandomOrdinal: reserve.fandomOrdinal,
-            ugcCode: reserve.ugcCode,
-            statusTier: reserve.statusTier,
-          });
-        } catch {
-          /* non-critical — sharing still works locally */
-        }
-      }
+      setCardsReady(true);
 
       const t1 = setTimeout(() => {
-        if (!cancelled) {
-          setCardRevealed(true);
-          playRevealSound();
-        }
-      }, 300);
-
+        if (!cancelled) { setCardRevealed(true); playRevealSound(); }
+      }, 600);
       const t2 = setTimeout(() => {
         if (!cancelled) setShowPrideBanner(true);
-      }, 1200);
-
+      }, 1400);
       timers.push(t1, t2);
     }
-
     const timers: ReturnType<typeof setTimeout>[] = [];
-    render();
-    return () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-    };
-  }, [photoSnapshot, fandom, wishText, guestName, captureMode, isGroup, loadImage]);
+    init();
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, [fandom]);
+
+  useEffect(() => {
+    if (!cardsReady || !photoReserve || !selfieDataUrl) return;
+    let cancelled = false;
+
+    async function upload() {
+      if (!card1ARef.current || !card1DRef.current || !photoReserve) return;
+      try {
+        const selectedRef = selectedVariant === 'midnight-foil' ? card1ARef : card1DRef;
+        const emailRef = selectedVariant === 'midnight-foil' ? card1DRef : card1ARef;
+        const [mainBlob, emailBlob] = await Promise.all([
+          cardElementToPngBlob(selectedRef.current!),
+          cardElementToPngBlob(emailRef.current!),
+        ]);
+        if (cancelled) return;
+        await uploadPhoto(mainBlob, fandom.id, fandom.displayName, {
+          photoId: photoReserve.id,
+          reserveToken: photoReserve.reserveToken,
+          guestName: guestName || undefined,
+          wishText: wishText || undefined,
+          captureMode,
+          serialNumber: photoReserve.serialNumber,
+          visitOrdinal: photoReserve.visitOrdinal,
+          fandomOrdinal: photoReserve.fandomOrdinal,
+          ugcCode: photoReserve.ugcCode,
+          statusTier: photoReserve.statusTier,
+          emailCardBlob: emailBlob,
+        });
+      } catch { /* non-critical */ }
+    }
+
+    const timer = setTimeout(upload, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [cardsReady, photoReserve, selfieDataUrl, selectedVariant, fandom, guestName, wishText, captureMode]);
+
+  const getSelectedCardRef = () =>
+    selectedVariant === 'midnight-foil' ? card1ARef : card1DRef;
 
   const handleShare = async () => {
-    if (!canvasRef.current || compositing) return;
+    const ref = getSelectedCardRef();
+    if (!ref.current || !cardsReady || exporting) return;
+    setExporting(true);
     setShareHint(i.preparing);
-    const result = await shareImage(canvasRef.current, fandom.displayName, isGroup);
-    switch (result) {
-      case 'shared':
-        trackShare(fandom.id);
-        setShareHint(i.sharedOk);
-        break;
-      case 'saved':
-        setShareHint(i.savedGallery);
-        break;
-      case 'error':
-        setShareHint('');
-        break;
-    }
+    try {
+      const blob = await cardElementToPngBlob(ref.current);
+      const result = await shareCardBlob(blob, fandom.displayName, shareText);
+      switch (result) {
+        case 'shared': trackShare(fandom.id); setShareHint(i.sharedOk); break;
+        case 'saved': setShareHint(i.savedGallery); break;
+        case 'error': setShareHint(''); break;
+      }
+    } catch { setShareHint(''); }
+    setExporting(false);
   };
 
-  const handleSave = () => {
-    if (!canvasRef.current || compositing) return;
-    saveImage(canvasRef.current);
-    setShareHint(i.photoSaved);
+  const handleSave = async () => {
+    const ref = getSelectedCardRef();
+    if (!ref.current || !cardsReady || exporting) return;
+    setExporting(true);
+    try {
+      const blob = await cardElementToPngBlob(ref.current);
+      downloadBlob(blob, `SummoningMirror_${fandom.displayName.replace(/\s+/g, '')}.png`);
+      setShareHint(i.photoSaved);
+    } catch { setShareHint(''); }
+    setExporting(false);
   };
 
-  const handleSocialShare = async (
-    platform: 'instagram' | 'tiktok' | 'whatsapp' | 'twitter'
-  ) => {
-    if (!canvasRef.current || compositing) return;
-
-    let result: ShareResult = 'error';
-    switch (platform) {
-      case 'instagram':
-        result = await shareToInstagram(canvasRef.current, shareText);
-        if (result === 'copied' || result === 'saved') trackShare(fandom.id);
-        setShareHint(result === 'copied' ? i.instagramHint : i.savedGallery);
-        break;
-      case 'tiktok':
-        result = await shareToTikTok(canvasRef.current, shareText);
-        if (result === 'copied' || result === 'saved') trackShare(fandom.id);
-        setShareHint(result === 'copied' ? i.tiktokHint : i.savedGallery);
-        break;
-      case 'whatsapp':
-        result = await shareToWhatsApp(canvasRef.current, shareText);
-        if (result === 'opened') {
-          trackShare(fandom.id);
-          setShareHint(i.whatsappHint);
-        }
-        break;
-      case 'twitter':
-        result = await shareToTwitter(canvasRef.current, shareText);
-        if (result === 'opened') {
-          trackShare(fandom.id);
-          setShareHint(i.twitterHint);
-        }
-        break;
-    }
+  const cardProps = {
+    fandomName: fandom.displayName,
+    selfieUrl: selfieDataUrl,
+    fandomArtUrl: `/fandoms/${fandom.stripImage}`,
+    serial: photoReserve?.serialNumber || 'HOS-NYC-00001',
+    stampedAt: new Date(),
+    tier: photoReserve ? (photoReserve.statusTier === 'pioneer' ? '◆ FOUNDER' : '◆ ' + photoReserve.statusTier.toUpperCase()) : '◆ FOUNDER',
+    memberLabel: photoReserve ? `MEMBER · ${(photoReserve.serialNumber || '').replace('HOS-NYC-', '')}` : undefined,
   };
 
-  const disabledStyle = compositing ? { opacity: 0.4, pointerEvents: 'none' as const } : {};
-  const accentColor = fandom.accentColor;
+  const disabledStyle = (!cardsReady || exporting) ? { opacity: 0.4, pointerEvents: 'none' as const } : {};
+  const otherVariant: CardVariant = selectedVariant === 'midnight-foil' ? 'holo-passport' : 'midnight-foil';
 
   return (
-    <div className="screen-enter flex flex-col md:flex-row items-center md:justify-center h-full w-full gap-3 sm:gap-4 md:gap-10 p-3 sm:p-4 md:p-8 relative overflow-y-auto"
-      style={{ backgroundColor: BRAND.colors.navy }}>
+    <div className="screen-enter flex flex-col items-center h-full w-full relative overflow-y-auto"
+      style={{ backgroundColor: '#0b0d12' }}>
 
       <div className="sparkle-field absolute inset-0 pointer-events-none z-0" />
 
-      <div className="relative flex-shrink-0 flex items-center justify-center z-10">
-        {compositing && (
-          <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-              <span className="text-gold/60 text-sm tracking-wider">{i.summoningCard}</span>
-            </div>
-          </div>
-        )}
-        <canvas
-          ref={canvasRef}
-          className={`rounded shadow-2xl max-h-[35dvh] sm:max-h-[42dvh] md:max-h-[68vh] ${cardRevealed ? 'card-cinematic-reveal' : ''}`}
-          style={{
-            maxWidth: 'min(90vw, 480px)',
-            width: 'auto',
-            height: 'auto',
-            border: `2px solid ${accentColor}55`,
-            opacity: compositing ? 0.2 : 1,
-            transform: compositing ? 'scale(0.85)' : 'scale(1)',
-            transition: 'opacity 0.6s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-        />
+      {/* Variant picker */}
+      <div className="relative z-10 w-full max-w-3xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <p className="text-[10px] sm:text-xs tracking-[0.2em]"
+            style={{ color: '#8a8578', fontFamily: "'JetBrains Mono', monospace" }}>
+            TAP A CARD TO SELECT · THE OTHER WILL BE EMAILED
+          </p>
+        </div>
+
+        {/* Card pair */}
+        <div className="flex gap-3 sm:gap-4 justify-center items-start overflow-x-auto pb-2" style={{ scrollSnapType: 'x mandatory' }}>
+          {(['midnight-foil', 'holo-passport'] as const).map((variant) => (
+            <button
+              key={variant}
+              type="button"
+              onClick={() => setSelectedVariant(variant)}
+              className="flex-shrink-0 cursor-pointer transition-all duration-300"
+              style={{
+                scrollSnapAlign: 'center',
+                transform: `scale(${selfieDataUrl ? 0.42 : 0.38})`,
+                transformOrigin: 'top center',
+                outline: selectedVariant === variant ? '3px solid #d4a94a' : '3px solid transparent',
+                outlineOffset: 6,
+                borderRadius: variant === 'holo-passport' ? 22 : 6,
+                opacity: selfieDataUrl ? (cardRevealed ? 1 : 0.3) : 0.1,
+                transition: 'opacity 0.8s ease, transform 0.5s ease, outline-color 0.3s ease',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+              }}>
+              <SelfieCard
+                ref={variant === 'midnight-foil' ? card1ARef : card1DRef}
+                variant={variant}
+                {...cardProps}
+              />
+            </button>
+          ))}
+        </div>
+
+        {/* Variant labels */}
+        <div className="flex justify-center gap-8 mt-1">
+          {(['midnight-foil', 'holo-passport'] as const).map((variant) => (
+            <button
+              key={variant}
+              type="button"
+              onClick={() => setSelectedVariant(variant)}
+              className="cursor-pointer transition-all"
+              style={{
+                font: "600 9px/1 'JetBrains Mono', monospace",
+                letterSpacing: '0.14em',
+                color: selectedVariant === variant ? '#d4a94a' : '#6c6858',
+                background: 'none', border: 'none', padding: '4px 8px',
+              }}>
+              {variant === 'midnight-foil' ? '1A · MIDNIGHT FOIL' : '1D · HOLO PASSPORT'}
+              {selectedVariant === variant && (
+                <span style={{ marginLeft: 6 }}>
+                  <Download size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                </span>
+              )}
+              {selectedVariant !== variant && (
+                <span style={{ marginLeft: 6 }}>
+                  <Mail size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-col items-center gap-2 sm:gap-3 md:gap-4 z-10 max-w-xs sm:max-w-sm md:max-w-md w-full pb-4 sm:pb-6 md:pb-0">
-        {showPrideBanner && (
-          <div className="pride-banner text-center mb-0.5 sm:mb-1">
-            <p className="text-base sm:text-lg md:text-2xl font-bold tracking-wider text-glow-gold"
-              style={{ color: accentColor, fontFamily: 'Georgia, serif' }}>
-              {fandom.displayName.toUpperCase()}
-            </p>
-            <p className="text-[10px] sm:text-xs md:text-sm tracking-[0.3em] mt-0.5 sm:mt-1"
-              style={{ color: BRAND.colors.gold }}>
-              {isGroup ? BRAND.text.fansBadge : BRAND.text.fanBadge}
-            </p>
-            <p className="text-[9px] sm:text-[10px] md:text-xs tracking-wider mt-1 sm:mt-2 italic"
-              style={{ color: 'rgba(197,165,90,0.6)' }}>
-              {i.cardSummoned}
-            </p>
-          </div>
-        )}
-
+      {/* Controls */}
+      <div className="relative z-10 w-full max-w-sm mx-auto px-3 sm:px-4 flex flex-col items-center gap-2 sm:gap-3 pb-4 sm:pb-6 mt-2">
         {showPrideBanner && photoReserve && (
           <div className="pride-banner w-full flex flex-col items-center gap-2">
             <StatusBadge tier={photoReserve.statusTier as StatusTier} lang={lang} />
@@ -311,64 +270,53 @@ export default function ResultScreen({
           </div>
         )}
 
-        {/* Primary CTA: Share */}
+        {/* Primary CTA: Share selected card */}
         <button
           onClick={handleShare}
-          disabled={compositing}
-          className="btn-gold-shimmer w-full flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 md:px-12 py-3 sm:py-3.5 md:py-4 text-xs sm:text-sm md:text-base font-bold tracking-[0.15em] rounded-sm border-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
+          disabled={!cardsReady || exporting}
+          className="btn-gold-shimmer w-full flex items-center justify-center gap-2 sm:gap-3 px-6 sm:px-8 py-3 sm:py-3.5 text-xs sm:text-sm font-bold tracking-[0.15em] rounded-sm border-2 cursor-pointer transition-all hover:scale-105 active:scale-95"
           style={{
-            borderColor: accentColor,
-            color: accentColor,
-            backgroundColor: `${accentColor}18`,
+            borderColor: '#d4a94a',
+            color: '#d4a94a',
+            backgroundColor: 'rgba(212,169,74,0.1)',
             ...disabledStyle,
           }}>
-          <Share2 size={18} className="sm:hidden" />
-          <Share2 size={20} className="hidden sm:block" />
-          {i.shareAndJoin}
+          <Share2 size={18} />
+          SHARE SELECTED CARD
         </button>
 
-        <div className="social-share-row w-full" style={disabledStyle}>
+        {/* Secondary: Save + New Photo */}
+        <div className="flex w-full gap-2 sm:gap-3">
           <button
-            type="button"
-            onClick={() => handleSocialShare('instagram')}
-            disabled={compositing}
-            className="social-share-btn social-share-instagram"
-            aria-label={i.shareInstagram}
-            style={{ borderColor: `${accentColor}40` }}>
-            {i.shareInstagram}
+            onClick={handleSave}
+            disabled={!cardsReady || exporting}
+            className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm tracking-[0.12em] rounded-sm border cursor-pointer transition-all hover:scale-105 active:scale-95"
+            style={{
+              borderColor: 'rgba(212,169,74,0.3)',
+              color: 'rgba(212,169,74,0.7)',
+              ...disabledStyle,
+            }}>
+            <Download size={16} />
+            {i.save}
           </button>
+
           <button
-            type="button"
-            onClick={() => handleSocialShare('whatsapp')}
-            disabled={compositing}
-            className="social-share-btn social-share-whatsapp"
-            aria-label={i.shareWhatsApp}
-            style={{ borderColor: `${accentColor}40` }}>
-            {i.shareWhatsApp}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSocialShare('twitter')}
-            disabled={compositing}
-            className="social-share-btn social-share-twitter"
-            aria-label={i.shareTwitter}
-            style={{ borderColor: `${accentColor}40` }}>
-            {i.shareTwitter}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSocialShare('tiktok')}
-            disabled={compositing}
-            className="social-share-btn social-share-tiktok"
-            aria-label={i.shareTikTok}
-            style={{ borderColor: `${accentColor}40` }}>
-            {i.shareTikTok}
+            onClick={safeNewPhoto}
+            className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 text-xs sm:text-sm tracking-[0.12em] rounded-sm border cursor-pointer transition-all hover:scale-105 active:scale-95"
+            style={{
+              borderColor: 'rgba(212,169,74,0.3)',
+              color: 'rgba(212,169,74,0.7)',
+              opacity: interactionReady ? 1 : 0.4,
+              pointerEvents: interactionReady ? 'auto' : 'none',
+            }}>
+            <RefreshCw size={16} />
+            {i.newPhoto}
           </button>
         </div>
 
         {shareHint && (
           <p className="text-xs tracking-wider text-center"
-            style={{ color: 'rgba(197,165,90,0.5)' }}>
+            style={{ color: 'rgba(212,169,74,0.5)' }}>
             {shareHint}
           </p>
         )}
@@ -379,38 +327,13 @@ export default function ResultScreen({
           </div>
         )}
 
-        {/* Secondary: Save + New Photo */}
-        <div className="flex w-full gap-2 sm:gap-3">
-          <button
-            onClick={handleSave}
-            disabled={compositing}
-            className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm tracking-[0.12em] rounded-sm border cursor-pointer transition-all hover:scale-105 active:scale-95"
-            style={{
-              borderColor: 'rgba(197,165,90,0.3)',
-              color: 'rgba(197,165,90,0.7)',
-              ...disabledStyle,
-            }}>
-            <Download size={16} />
-            {i.save}
-          </button>
-
-          <button
-            onClick={safeNewPhoto}
-            className="flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm tracking-[0.12em] rounded-sm border cursor-pointer transition-all hover:scale-105 active:scale-95"
-            style={{
-              borderColor: 'rgba(197,165,90,0.3)',
-              color: 'rgba(197,165,90,0.7)',
-              opacity: interactionReady ? 1 : 0.4,
-              pointerEvents: interactionReady ? 'auto' : 'none',
-            }}>
-            <RefreshCw size={16} />
-            {i.newPhoto}
-          </button>
-        </div>
-
-        {/* Email capture — membership onboarding */}
+        {/* Email capture — sends the OTHER variant */}
         {showPrideBanner && (
-          <div className="pride-banner w-full flex justify-center">
+          <div className="pride-banner w-full">
+            <p className="text-[9px] tracking-[0.15em] text-center mb-1"
+              style={{ color: '#8a8578', fontFamily: "'JetBrains Mono', monospace" }}>
+              THE {otherVariant === 'midnight-foil' ? 'MIDNIGHT FOIL' : 'HOLO PASSPORT'} CARD WILL BE EMAILED TO YOU
+            </p>
             <EmailCapture
               fandomId={fandom.id}
               fandomName={fandom.displayName}
@@ -423,7 +346,7 @@ export default function ResultScreen({
           </div>
         )}
 
-        {/* Tertiary: Founder member CTA */}
+        {/* Founder member CTA */}
         {showPrideBanner && (
           <a
             href={getFounderRegisterUrl(fandom.displayName)}
@@ -431,9 +354,9 @@ export default function ResultScreen({
             rel="noopener noreferrer"
             className="pride-banner w-full flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 text-[10px] sm:text-xs tracking-[0.1em] rounded-sm border cursor-pointer transition-all hover:scale-105 active:scale-95"
             style={{
-              borderColor: 'rgba(197,165,90,0.25)',
-              color: 'rgba(197,165,90,0.55)',
-              backgroundColor: 'rgba(197,165,90,0.04)',
+              borderColor: 'rgba(212,169,74,0.2)',
+              color: 'rgba(212,169,74,0.5)',
+              backgroundColor: 'rgba(212,169,74,0.04)',
               textDecoration: 'none',
             }}>
             <Crown size={13} />
@@ -441,21 +364,34 @@ export default function ResultScreen({
           </a>
         )}
 
-        <div className="mt-0.5 sm:mt-1 p-2 sm:p-3 md:p-4 rounded border w-full"
+        <div className="mt-0.5 sm:mt-1 p-2 sm:p-3 rounded border w-full"
           style={{
-            borderColor: `${accentColor}25`,
-            backgroundColor: `${accentColor}08`,
+            borderColor: 'rgba(212,169,74,0.15)',
+            backgroundColor: 'rgba(212,169,74,0.04)',
           }}>
-          <p className="text-[9px] sm:text-[10px] md:text-xs tracking-wider mb-1 sm:mb-2"
-            style={{ color: 'rgba(197,165,90,0.4)' }}>
+          <p className="text-[9px] sm:text-[10px] tracking-wider mb-1"
+            style={{ color: 'rgba(212,169,74,0.4)' }}>
             {i.suggestedCaption}
           </p>
-          <p className="text-[11px] sm:text-xs md:text-sm italic leading-relaxed"
+          <p className="text-[11px] sm:text-xs italic leading-relaxed"
             style={{ color: 'rgba(255,255,255,0.6)' }}>
             {shareText}
           </p>
         </div>
       </div>
+
+      {/* Loading overlay */}
+      {!cardsReady && (
+        <div className="absolute inset-0 flex items-center justify-center z-20" style={{ backgroundColor: '#0b0d12' }}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-2 rounded-full animate-spin"
+              style={{ borderColor: '#d4a94a', borderTopColor: 'transparent' }} />
+            <span className="text-sm tracking-wider" style={{ color: 'rgba(212,169,74,0.6)' }}>
+              {i.summoningCard}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

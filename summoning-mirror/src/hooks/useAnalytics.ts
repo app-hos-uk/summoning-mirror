@@ -114,11 +114,12 @@ export async function uploadPhoto(
     fandomOrdinal: number;
     ugcCode: string;
     statusTier: string;
+    emailCardBlob?: Blob;
   }
 ): Promise<string | null> {
   try {
     const form = new FormData();
-    form.append('image', blob, 'SummoningMirror_HouseOfSpells.jpg');
+    form.append('image', blob, 'SummoningMirror_HouseOfSpells.png');
     form.append('fandomId', fandomId);
     form.append('fandomName', fandomName);
     form.append('photoId', metadata.photoId);
@@ -131,6 +132,9 @@ export async function uploadPhoto(
     form.append('fandomOrdinal', String(metadata.fandomOrdinal));
     form.append('ugcCode', metadata.ugcCode);
     form.append('statusTier', metadata.statusTier);
+    if (metadata.emailCardBlob) {
+      form.append('emailCard', metadata.emailCardBlob, 'SummoningMirror_EmailCard.png');
+    }
 
     const res = await fetch('/api/photos/upload', {
       method: 'POST',

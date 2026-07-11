@@ -10,6 +10,7 @@ import PassportPage from './screens/PassportPage';
 import AdminLogin from './admin/AdminLogin';
 import { BRAND } from './utils/branding';
 import { getAdminToken, setAdminToken, clearAdminToken, adminHeaders } from './utils/adminAuth';
+import CardPreviewScreen from './dev/CardPreviewScreen';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
@@ -29,6 +30,7 @@ export default function App() {
   const isPassport = pathname.startsWith('/card/');
   const isAdmin = pathname === '/admin';
   const isAnalytics = pathname === '/admin/analytics';
+  const isCardPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'cards';
   const needsAuth = isAdmin || isAnalytics;
 
   useEffect(() => {
@@ -112,6 +114,10 @@ export default function App() {
 
   if (isPassport) {
     return <PassportPage />;
+  }
+
+  if (isCardPreview) {
+    return <CardPreviewScreen />;
   }
 
   return (
