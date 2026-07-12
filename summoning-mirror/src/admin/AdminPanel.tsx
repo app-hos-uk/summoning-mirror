@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Plus, Trash2, Edit3, Save, X, Eye, EyeOff, ArrowUp, ArrowDown, Upload, LogOut, Lock } from 'lucide-react';
+import { Plus, Trash2, Edit3, Save, X, Eye, EyeOff, ArrowUp, ArrowDown, Upload, LogOut, Lock, Info, ChevronDown, ChevronUp as ChevUp } from 'lucide-react';
 import { useAllFandoms } from '../hooks/useFandoms';
 import type { Fandom } from '../types/fandom';
 import { BRAND } from '../utils/branding';
@@ -27,6 +27,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [showImageGuide, setShowImageGuide] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [pwLoading, setPwLoading] = useState(false);
@@ -280,6 +281,97 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           </div>
         )}
 
+        {/* Image Upload Guide */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowImageGuide(!showImageGuide)}
+            className="flex items-center gap-2 text-xs tracking-wider cursor-pointer transition-opacity hover:opacity-100 opacity-60"
+            style={{ color: BRAND.colors.gold }}>
+            <Info size={14} />
+            IMAGE UPLOAD GUIDE
+            {showImageGuide ? <ChevUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {showImageGuide && (
+            <div className="mt-3 p-4 md:p-5 rounded-lg border"
+              style={{ borderColor: 'rgba(197,165,90,0.2)', backgroundColor: 'rgba(197,165,90,0.03)' }}>
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6">
+                {/* Specs */}
+                <div>
+                  <h4 className="text-xs font-bold tracking-wider mb-3" style={{ color: BRAND.colors.gold }}>
+                    RECOMMENDED IMAGE SPECS
+                  </h4>
+                  <div className="space-y-2 text-xs" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                    <div className="flex gap-3">
+                      <span className="tracking-wider font-bold min-w-[80px]" style={{ color: 'rgba(197,165,90,0.6)' }}>FORMAT</span>
+                      <span>PNG with transparent background <span style={{ color: 'rgba(197,165,90,0.5)' }}>(preferred)</span> or JPG</span>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="tracking-wider font-bold min-w-[80px]" style={{ color: 'rgba(197,165,90,0.6)' }}>SIZE</span>
+                      <span>500 × 500px minimum (square ratio works best)</span>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="tracking-wider font-bold min-w-[80px]" style={{ color: 'rgba(197,165,90,0.6)' }}>MAX FILE</span>
+                      <span>10 MB</span>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="tracking-wider font-bold min-w-[80px]" style={{ color: 'rgba(197,165,90,0.6)' }}>CONTENT</span>
+                      <span>Official fandom logo or emblem — centred, no extra padding</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 rounded" style={{ backgroundColor: 'rgba(197,165,90,0.06)', border: '1px solid rgba(197,165,90,0.1)' }}>
+                    <p className="text-[10px] tracking-wider leading-relaxed" style={{ color: 'rgba(197,165,90,0.5)' }}>
+                      <strong style={{ color: 'rgba(197,165,90,0.7)' }}>TIPS:</strong> Use PNG with transparent background for best results in the circular selector. 
+                      The image is displayed in two places: a <strong>circular icon</strong> on the fandom picker (≈80px) and a 
+                      <strong> card panel</strong> on the selfie card (≈200×250px). Both use <em>contain</em> fit, so the full logo 
+                      is always visible — no cropping. Square or circular logos work best.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Visual reference — shows how the image renders */}
+                <div className="flex flex-col items-center gap-4">
+                  <h4 className="text-xs font-bold tracking-wider" style={{ color: BRAND.colors.gold }}>
+                    PREVIEW CONTEXTS
+                  </h4>
+                  {/* Circle preview */}
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div style={{
+                      width: 72, height: 72, borderRadius: '50%', padding: 3,
+                      background: 'linear-gradient(135deg, rgba(197,165,90,0.3), rgba(197,165,90,0.1))',
+                    }}>
+                      <div style={{
+                        width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                        backgroundColor: '#0C1428', padding: 4,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <img src="/fandoms/marvel.png" alt="Example"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '50%' }}
+                          onError={(e) => { (e.target as HTMLImageElement).src = '/fandoms/marvel.jpg'; }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-[9px] tracking-wider" style={{ color: 'rgba(197,165,90,0.4)' }}>FANDOM PICKER</span>
+                  </div>
+                  {/* Card panel preview */}
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div style={{
+                      width: 90, height: 112, borderRadius: 4, overflow: 'hidden',
+                      backgroundColor: '#0a0f1c', boxShadow: 'inset 0 0 0 1px rgba(212,169,74,0.4)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6,
+                    }}>
+                      <img src="/fandoms/marvel.png" alt="Example"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        onError={(e) => { (e.target as HTMLImageElement).src = '/fandoms/marvel.jpg'; }}
+                      />
+                    </div>
+                    <span className="text-[9px] tracking-wider" style={{ color: 'rgba(197,165,90,0.4)' }}>SELFIE CARD</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Create form */}
         {creating && (
           <div className="mb-6 p-4 md:p-6 rounded-lg border"
@@ -338,19 +430,22 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
               </div>
 
               {/* Strip image preview */}
-              <div className="w-20 h-14 md:w-28 md:h-16 rounded overflow-hidden flex-shrink-0 relative group">
+              <div className="w-20 h-14 md:w-28 md:h-16 rounded overflow-hidden flex-shrink-0 relative group"
+                style={{ backgroundColor: '#0C1428', border: '1px solid rgba(197,165,90,0.1)' }}>
                 <img
                   src={`/fandoms/${fandom.stripImage}`}
                   alt={fandom.displayName}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full"
+                  style={{ objectFit: 'contain', padding: 2 }}
                 />
                 <button
                   onClick={() => {
                     setUploadingId(fandom.id);
                     fileRef.current?.click();
                   }}
-                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                  <Upload size={16} style={{ color: BRAND.colors.gold }} />
+                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 cursor-pointer">
+                  <Upload size={14} style={{ color: BRAND.colors.gold }} />
+                  <span className="text-[8px] tracking-wider" style={{ color: BRAND.colors.gold }}>CHANGE</span>
                 </button>
               </div>
 
