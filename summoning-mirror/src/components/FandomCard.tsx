@@ -26,43 +26,31 @@ export default function FandomCard({ fandom, selected, onSelect }: Props) {
             : 'none',
         }}>
         <div
-          className="rounded-full overflow-hidden bg-navy"
+          className="rounded-full overflow-hidden"
           style={{
             width: 'clamp(58px, 10vw, 80px)',
             height: 'clamp(58px, 10vw, 80px)',
-            padding: '2px',
+            padding: '4px',
             backgroundColor: '#0C1428',
           }}>
-          <div className="w-full h-full rounded-full overflow-hidden relative">
+          <div className="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center"
+            style={{ backgroundColor: '#0C1428' }}>
             <img
               src={`/fandoms/${fandom.stripImage}`}
               alt={fandom.displayName}
-              className="w-full h-full object-cover scale-150"
+              className="w-full h-full rounded-full"
+              style={{ objectFit: 'contain' }}
               loading="lazy"
             />
-            {/* Dark overlay */}
-            <div
-              className="absolute inset-0 rounded-full transition-opacity duration-200"
-              style={{
-                background: selected
-                  ? `radial-gradient(circle, transparent 30%, ${fandom.accentColor}30 100%)`
-                  : 'radial-gradient(circle, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.5) 100%)',
-                opacity: selected ? 1 : 0.7,
-              }}
-            />
-            {/* Initial letter overlay for visual punch */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span
-                className="font-bold drop-shadow-lg transition-all duration-200"
+            {/* Subtle ring highlight when selected */}
+            {selected && (
+              <div
+                className="absolute inset-0 rounded-full pointer-events-none"
                 style={{
-                  color: selected ? fandom.accentColor : 'rgba(255,255,255,0.9)',
-                  fontSize: 'clamp(20px, 4vw, 28px)',
-                  fontFamily: 'Georgia, serif',
-                  textShadow: '0 2px 10px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.5)',
-                }}>
-                {getInitials(fandom.displayName)}
-              </span>
-            </div>
+                  boxShadow: `inset 0 0 8px ${fandom.accentColor}40`,
+                }}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -81,10 +69,4 @@ export default function FandomCard({ fandom, selected, onSelect }: Props) {
       </span>
     </button>
   );
-}
-
-function getInitials(name: string): string {
-  const words = name.split(' ');
-  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-  return words.map(w => w[0]).join('').substring(0, 3).toUpperCase();
 }

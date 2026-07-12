@@ -213,16 +213,62 @@ function deletePhotoFiles(photo: PhotoEntry): void {
   }
 }
 
-// --- Email transport (configure via env vars) ---
+// --- Email transport (configurable via admin UI or env vars) ---
 
-const smtpTransport = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: false,
-  auth: process.env.SMTP_USER && process.env.SMTP_PASS
-    ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-    : undefined,
-});
+const SMTP_SETTINGS_PATH = path.join(DATA_DIR, 'smtp-settings.json');
+
+interface SmtpSettings {
+  host: string;
+  port: string;
+  user: string;
+  pass: string;
+  from: string;
+}
+
+function loadSmtpSettings(): SmtpSettings {
+  try {
+    if (fs.existsSync(SMTP_SETTINGS_PATH)) {
+      return JSON.parse(fs.readFileSync(SMTP_SETTINGS_PATH, 'utf-8'));
+    }
+  } catch { /* use defaults */ }
+  return { host: '', port: '', user: '', pass: '', from: '' };
+}
+
+function saveSmtpSettings(settings: SmtpSettings): void {
+  fs.writeFileSync(SMTP_SETTINGS_PATH, JSON.stringify(settings, null, 2), 'utf-8');
+}
+
+function getSmtpConfig() {
+  const saved = loadSmtpSettings();
+  const host = saved.host || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = parseInt(saved.port || process.env.SMTP_PORT || '587', 10);
+  const user = saved.user || process.env.SMTP_USER || '';
+  const pass = saved.pass || process.env.SMTP_PASS || '';
+  const from = saved.from || process.env.SMTP_FROM || 'House of Spells NYC';
+  return { host, port, user, pass, from };
+}
+
+function createSmtpTransport() {
+  const cfg = getSmtpConfig();
+  return nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: false,
+    auth: cfg.user && cfg.pass ? { user: cfg.user, pass: cfg.pass } : undefined,
+  });
+}
+
+let smtpTransport = createSmtpTransport();
+
+function getSmtpFrom(): string {
+  const cfg = getSmtpConfig();
+  return cfg.from;
+}
+
+function getSmtpUser(): string {
+  const cfg = getSmtpConfig();
+  return cfg.user;
+}
 
 const SMTP_FROM = process.env.SMTP_FROM || 'House of Spells NYC';
 const SMTP_USER = process.env.SMTP_USER || '';
@@ -1483,6 +1529,56 @@ adminRouter.get('/gdpr/export/:email', (req, res) => {
   const emails = readEmails().filter((e) => e.email.toLowerCase() === targetEmail);
   const photos = readPhotos().filter((p) => p.email?.toLowerCase() === targetEmail);
   res.json({ email: targetEmail, emails, photos });
+});
+
+adminRouter.get('/smtp-settings', (_req, res) => {
+  const saved = loadSmtpSettings();
+  res.json({
+    host: saved.host || process.env.SMTP_HOST || '',
+    port: saved.port || process.env.SMTP_PORT || '',
+    user: saved.user || process.env.SMTP_USER || '',
+    pass: saved.pass ? '••••••••' : (process.env.SMTP_PASS ? '••••••••' : ''),
+    from: saved.from || process.env.SMTP_FROM || '',
+  });
+});
+
+adminRouter.put('/smtp-settings', (req, res) => {
+  const { host, port, user, pass, from } = req.body;
+  if (typeof host !== 'string' || typeof port !== 'string' || typeof user !== 'string' || typeof from !== 'string') {
+    return res.status(400).json({ error: 'Invalid settings format' });
+  }
+
+  const current = loadSmtpSettings();
+  const settings: SmtpSettings = {
+    host: host.trim(),
+    port: port.trim(),
+    user: user.trim(),
+    pass: pass === '••••••••' ? current.pass : (pass || '').trim(),
+    from: from.trim(),
+  };
+  saveSmtpSettings(settings);
+  smtpTransport = createSmtpTransport();
+  console.log('[SMTP] Settings updated via admin panel');
+  res.json({ success: true });
+});
+
+adminRouter.post('/smtp-test', async (req, res) => {
+  const cfg = getSmtpConfig();
+  if (!cfg.user || !cfg.pass) {
+    return res.status(400).json({ error: 'SMTP not configured — set credentials first' });
+  }
+  try {
+    await smtpTransport.sendMail({
+      from: `"${cfg.from}" <${cfg.user}>`,
+      to: cfg.user,
+      subject: 'Summoning Mirror — SMTP Test',
+      html: '<p>SMTP configuration is working correctly.</p>',
+    });
+    res.json({ success: true });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: `SMTP test failed: ${errMsg}` });
+  }
 });
 
 app.use('/api/admin', adminRouter);

@@ -106,8 +106,10 @@ function MidnightFoil({ selfieUrl, fandomArtUrl, fandomName, serial, stampedAt, 
           <div style={{
             position: 'relative', aspectRatio: '4/5', borderRadius: 3, overflow: 'hidden',
             boxShadow: 'inset 0 0 0 1px rgba(212,169,74,0.4)',
+            background: '#0a0f1c',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <img src={fandomArtUrl} alt="Fandom" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <img src={fandomArtUrl} alt="Fandom" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
             <div style={cornerMark('tl', goldBorder)} />
             <div style={cornerMark('tr', goldBorder)} />
             <div style={cornerMark('bl', goldBorder)} />
@@ -233,8 +235,10 @@ function HoloPassport({ selfieUrl, fandomArtUrl, fandomName, serial, chapter = '
           <div style={{
             position: 'relative', borderRadius: 14, overflow: 'hidden', aspectRatio: '4/5',
             boxShadow: 'inset 0 0 0 1px rgba(122,92,255,0.4)',
+            background: '#0b0d12',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <img src={fandomArtUrl} alt="Fandom" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            <img src={fandomArtUrl} alt="Fandom" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
             <div style={{
               position: 'absolute', top: 10, right: 10,
               font: "700 8px/1 'JetBrains Mono', monospace", letterSpacing: '0.16em',

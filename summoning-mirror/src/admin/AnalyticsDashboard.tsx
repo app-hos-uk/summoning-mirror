@@ -1,7 +1,24 @@
+import { useState, useCallback, useEffect } from 'react';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { BRAND } from '../utils/branding';
-import { RefreshCw, TrendingUp, Users, Share2, Mail, BarChart3, LogOut } from 'lucide-react';
-import { clearAdminToken } from '../utils/adminAuth';
+import { RefreshCw, TrendingUp, Users, Share2, Mail, BarChart3, LogOut, ChevronLeft, ChevronRight, Trash2, Download, Settings } from 'lucide-react';
+import { clearAdminToken, adminHeaders, adminJsonHeaders } from '../utils/adminAuth';
+
+interface EmailEntry {
+  email: string;
+  fandomId: string;
+  fandomName: string;
+  source: string;
+  timestamp: string;
+}
+
+interface EmailsResponse {
+  emails: EmailEntry[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 interface AnalyticsDashboardProps {
   onLogout: () => void;
@@ -9,6 +26,68 @@ interface AnalyticsDashboardProps {
 
 export default function AnalyticsDashboard({ onLogout }: AnalyticsDashboardProps) {
   const { data, loading, error, refetch } = useAnalytics();
+  const [showEmails, setShowEmails] = useState(false);
+  const [emailData, setEmailData] = useState<EmailsResponse | null>(null);
+  const [emailPage, setEmailPage] = useState(1);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [showSmtpSettings, setShowSmtpSettings] = useState(false);
+
+  const fetchEmails = useCallback(async (page: number) => {
+    setEmailLoading(true);
+    try {
+      const res = await fetch(`/api/admin/emails?page=${page}&limit=20`, { headers: adminHeaders() });
+      if (res.ok) {
+        const d = await res.json();
+        setEmailData(d);
+        setEmailPage(d.page);
+      }
+    } catch { /* ignore */ } finally {
+      setEmailLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showEmails) fetchEmails(emailPage);
+  }, [showEmails, emailPage, fetchEmails]);
+
+  const handleDeleteEmail = async (email: string) => {
+    if (!confirm(`Delete all records for ${email}?`)) return;
+    try {
+      const res = await fetch(`/api/admin/emails/${encodeURIComponent(email)}`, {
+        method: 'DELETE', headers: adminHeaders(),
+      });
+      if (res.ok) {
+        setEmailMessage('Email deleted');
+        setTimeout(() => setEmailMessage(''), 2000);
+        fetchEmails(emailPage);
+        refetch();
+      }
+    } catch { setEmailMessage('Failed to delete'); }
+  };
+
+  const handleExportEmails = async () => {
+    try {
+      let allEmails: EmailEntry[] = [];
+      let page = 1;
+      while (true) {
+        const res = await fetch(`/api/admin/emails?page=${page}&limit=100`, { headers: adminHeaders() });
+        if (!res.ok) break;
+        const d: EmailsResponse = await res.json();
+        allEmails = allEmails.concat(d.emails);
+        if (page >= d.totalPages) break;
+        page++;
+      }
+      const csv = 'Email,Fandom,Source,Timestamp\n' + allEmails.map(e =>
+        `"${e.email}","${e.fandomName}","${e.source}","${e.timestamp}"`
+      ).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `emails-export-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch { setEmailMessage('Export failed'); }
+  };
 
   if (loading) {
     return (
@@ -84,9 +163,110 @@ export default function AnalyticsDashboard({ onLogout }: AnalyticsDashboardProps
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <KpiCard icon={<TrendingUp size={20} />} label="Cards Generated" value={data.totalCards} />
           <KpiCard icon={<Share2 size={20} />} label="Social Shares" value={data.totalShares} />
-          <KpiCard icon={<Mail size={20} />} label="Emails Collected" value={data.totalEmails} />
+          <KpiCard icon={<Mail size={20} />} label="Emails Collected" value={data.totalEmails}
+            onClick={() => setShowEmails(!showEmails)} clickable />
           <KpiCard icon={<Users size={20} />} label="Active Fandoms" value={Object.keys(data.fandomCounts).length} />
         </div>
+
+        {/* Email List (expanded) */}
+        {showEmails && (
+          <div className="mb-8 p-4 md:p-6 rounded-lg border"
+            style={{ borderColor: 'rgba(197,165,90,0.15)', backgroundColor: 'rgba(197,165,90,0.02)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold tracking-wider" style={{ color: BRAND.colors.gold }}>
+                COLLECTED EMAILS
+              </h2>
+              <div className="flex items-center gap-2">
+                <button onClick={handleExportEmails}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border cursor-pointer text-xs tracking-wider transition-all hover:scale-105"
+                  style={{ borderColor: 'rgba(197,165,90,0.3)', color: BRAND.colors.gold }}>
+                  <Download size={13} /> CSV
+                </button>
+                <button onClick={() => setShowSmtpSettings(!showSmtpSettings)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border cursor-pointer text-xs tracking-wider transition-all hover:scale-105"
+                  style={{ borderColor: 'rgba(197,165,90,0.3)', color: BRAND.colors.gold }}>
+                  <Settings size={13} /> SMTP
+                </button>
+              </div>
+            </div>
+
+            {emailMessage && (
+              <div className="mb-3 p-2 rounded text-xs tracking-wider text-center"
+                style={{ backgroundColor: 'rgba(197,165,90,0.1)', color: BRAND.colors.gold }}>
+                {emailMessage}
+              </div>
+            )}
+
+            {/* SMTP Settings Panel */}
+            {showSmtpSettings && <SmtpSettingsPanel />}
+
+            {emailLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : emailData && emailData.emails.length > 0 ? (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(197,165,90,0.15)' }}>
+                        <th className="text-left py-2 px-2 tracking-wider" style={{ color: 'rgba(197,165,90,0.5)' }}>EMAIL</th>
+                        <th className="text-left py-2 px-2 tracking-wider" style={{ color: 'rgba(197,165,90,0.5)' }}>FANDOM</th>
+                        <th className="text-left py-2 px-2 tracking-wider hidden md:table-cell" style={{ color: 'rgba(197,165,90,0.5)' }}>SOURCE</th>
+                        <th className="text-left py-2 px-2 tracking-wider hidden md:table-cell" style={{ color: 'rgba(197,165,90,0.5)' }}>DATE</th>
+                        <th className="py-2 px-2" style={{ width: 40 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {emailData.emails.map((e, i) => (
+                        <tr key={`${e.email}-${i}`}
+                          style={{ borderBottom: '1px solid rgba(197,165,90,0.07)' }}>
+                          <td className="py-2 px-2" style={{ color: 'white' }}>{e.email}</td>
+                          <td className="py-2 px-2" style={{ color: 'rgba(197,165,90,0.7)' }}>{e.fandomName}</td>
+                          <td className="py-2 px-2 hidden md:table-cell" style={{ color: 'rgba(197,165,90,0.4)' }}>{e.source}</td>
+                          <td className="py-2 px-2 hidden md:table-cell" style={{ color: 'rgba(197,165,90,0.4)' }}>
+                            {new Date(e.timestamp).toLocaleDateString()}
+                          </td>
+                          <td className="py-2 px-2">
+                            <button onClick={() => handleDeleteEmail(e.email)}
+                              className="cursor-pointer hover:opacity-100 opacity-40 transition-opacity"
+                              style={{ color: 'rgba(255,80,80,0.7)' }}>
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination */}
+                {emailData.totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-4">
+                    <button onClick={() => setEmailPage(Math.max(1, emailPage - 1))}
+                      disabled={emailPage <= 1}
+                      className="p-1.5 rounded cursor-pointer disabled:opacity-20 transition-opacity"
+                      style={{ color: BRAND.colors.gold }}>
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-xs tracking-wider" style={{ color: 'rgba(197,165,90,0.5)' }}>
+                      Page {emailData.page} of {emailData.totalPages} ({emailData.total} total)
+                    </span>
+                    <button onClick={() => setEmailPage(Math.min(emailData.totalPages, emailPage + 1))}
+                      disabled={emailPage >= emailData.totalPages}
+                      className="p-1.5 rounded cursor-pointer disabled:opacity-20 transition-opacity"
+                      style={{ color: BRAND.colors.gold }}>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-center py-6 tracking-wider" style={{ color: 'rgba(197,165,90,0.3)' }}>
+                No emails collected yet.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Top Fandoms */}
         <div className="mb-8 p-4 md:p-6 rounded-lg border"
@@ -199,12 +379,18 @@ export default function AnalyticsDashboard({ onLogout }: AnalyticsDashboardProps
   );
 }
 
-function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function KpiCard({ icon, label, value, onClick, clickable }: {
+  icon: React.ReactNode; label: string; value: number; onClick?: () => void; clickable?: boolean;
+}) {
+  const Tag = clickable ? 'button' : 'div';
   return (
-    <div className="p-4 md:p-6 rounded-lg border text-center"
+    <Tag
+      onClick={onClick}
+      className={`p-4 md:p-6 rounded-lg border text-center transition-all ${clickable ? 'cursor-pointer hover:scale-105 hover:border-gold/40' : ''}`}
       style={{
         borderColor: 'rgba(197,165,90,0.15)',
         backgroundColor: 'rgba(197,165,90,0.03)',
+        ...(clickable ? { background: 'none' } : {}),
       }}>
       <div className="flex justify-center mb-2" style={{ color: BRAND.colors.gold }}>
         {icon}
@@ -216,6 +402,108 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
       <p className="text-[10px] md:text-xs tracking-wider mt-1"
         style={{ color: 'rgba(197,165,90,0.5)' }}>
         {label}
+        {clickable && <span className="block text-[8px] mt-0.5 opacity-60">CLICK TO VIEW</span>}
+      </p>
+    </Tag>
+  );
+}
+
+function SmtpSettingsPanel() {
+  const [form, setForm] = useState({ host: '', port: '', user: '', pass: '', from: '' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/smtp-settings', { headers: adminHeaders() })
+      .then(r => r.json())
+      .then(d => { setForm(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/smtp-settings', {
+        method: 'PUT',
+        headers: adminJsonHeaders(),
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        setMsg('SMTP settings saved!');
+      } else {
+        const err = await res.json();
+        setMsg(err.error || 'Failed to save');
+      }
+    } catch { setMsg('Network error'); }
+    finally { setSaving(false); setTimeout(() => setMsg(''), 3000); }
+  };
+
+  const handleTestEmail = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/smtp-test', {
+        method: 'POST', headers: adminHeaders(),
+      });
+      const d = await res.json();
+      setMsg(d.success ? 'Test email sent!' : (d.error || 'Test failed'));
+    } catch { setMsg('Network error'); }
+    finally { setSaving(false); setTimeout(() => setMsg(''), 5000); }
+  };
+
+  const inputStyle = {
+    backgroundColor: 'rgba(197,165,90,0.05)',
+    borderColor: 'rgba(197,165,90,0.2)',
+    color: 'white',
+  };
+
+  if (loading) return <div className="py-4 text-center"><div className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin mx-auto" /></div>;
+
+  return (
+    <div className="mb-4 p-4 rounded-lg border" style={{ borderColor: 'rgba(197,165,90,0.15)', backgroundColor: 'rgba(197,165,90,0.02)' }}>
+      <h3 className="text-xs font-bold tracking-wider mb-3" style={{ color: BRAND.colors.gold }}>EMAIL / SMTP CONFIGURATION</h3>
+      {msg && <div className="mb-3 p-2 rounded text-xs tracking-wider text-center" style={{ backgroundColor: 'rgba(197,165,90,0.1)', color: BRAND.colors.gold }}>{msg}</div>}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="block text-[10px] tracking-wider mb-1" style={{ color: 'rgba(197,165,90,0.5)' }}>SMTP HOST</label>
+          <input type="text" value={form.host} onChange={e => setForm({ ...form, host: e.target.value })}
+            placeholder="smtp.gmail.com" className="w-full px-3 py-2 rounded border text-sm outline-none" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] tracking-wider mb-1" style={{ color: 'rgba(197,165,90,0.5)' }}>SMTP PORT</label>
+          <input type="text" value={form.port} onChange={e => setForm({ ...form, port: e.target.value })}
+            placeholder="587" className="w-full px-3 py-2 rounded border text-sm outline-none" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] tracking-wider mb-1" style={{ color: 'rgba(197,165,90,0.5)' }}>SMTP USER</label>
+          <input type="text" value={form.user} onChange={e => setForm({ ...form, user: e.target.value })}
+            placeholder="user@example.com" className="w-full px-3 py-2 rounded border text-sm outline-none" style={inputStyle} />
+        </div>
+        <div>
+          <label className="block text-[10px] tracking-wider mb-1" style={{ color: 'rgba(197,165,90,0.5)' }}>SMTP PASSWORD</label>
+          <input type="password" value={form.pass} onChange={e => setForm({ ...form, pass: e.target.value })}
+            placeholder="••••••••" className="w-full px-3 py-2 rounded border text-sm outline-none" style={inputStyle} />
+        </div>
+      </div>
+      <div className="mb-3">
+        <label className="block text-[10px] tracking-wider mb-1" style={{ color: 'rgba(197,165,90,0.5)' }}>FROM ADDRESS</label>
+        <input type="text" value={form.from} onChange={e => setForm({ ...form, from: e.target.value })}
+          placeholder="House of Spells <noreply@houseofspells.com>" className="w-full px-3 py-2 rounded border text-sm outline-none" style={inputStyle} />
+      </div>
+      <div className="flex gap-3">
+        <button onClick={handleSave} disabled={saving}
+          className="px-4 py-2 rounded border cursor-pointer text-xs tracking-wider disabled:opacity-50 transition-all hover:scale-105"
+          style={{ borderColor: BRAND.colors.gold, color: BRAND.colors.gold }}>
+          {saving ? 'SAVING...' : 'SAVE SETTINGS'}
+        </button>
+        <button onClick={handleTestEmail} disabled={saving}
+          className="px-4 py-2 rounded border cursor-pointer text-xs tracking-wider disabled:opacity-50 transition-all hover:scale-105"
+          style={{ borderColor: 'rgba(197,165,90,0.3)', color: 'rgba(197,165,90,0.6)' }}>
+          SEND TEST EMAIL
+        </button>
+      </div>
+      <p className="text-[9px] tracking-wider mt-2" style={{ color: 'rgba(197,165,90,0.3)' }}>
+        Settings are stored on the server and persist across deployments. Leave blank to use environment variables.
       </p>
     </div>
   );
