@@ -154,19 +154,21 @@ export async function sendPhotoEmail(
   email: string,
   firstName: string,
   fandomName: string
-): Promise<boolean | 'needs_verification'> {
+): Promise<boolean | 'needs_verification' | { error: string }> {
   try {
     const res = await fetch(`/api/photos/${photoId}/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, firstName, fandomName }),
     });
-    if (!res.ok) return false;
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { error: (data as { error?: string }).error || 'Failed to send email' };
+    }
     if (data.needsVerification) return 'needs_verification';
     return true;
   } catch {
-    return false;
+    return { error: 'Network error — could not reach email service' };
   }
 }
 

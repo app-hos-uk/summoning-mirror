@@ -4,6 +4,7 @@ import { submitEmail, sendPhotoEmail } from '../hooks/useAnalytics';
 import { registerFounderMember } from '../utils/loyalty';
 import type { Fandom, Lang } from '../types/fandom';
 import { t } from '../utils/i18n';
+import { BRAND } from '../utils/branding';
 
 interface Props {
   fandomId: string;
@@ -28,10 +29,11 @@ export default function EmailCapture({
   const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
   const [preferredFandom, setPreferredFandom] = useState('');
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [sentWithFounder, setSentWithFounder] = useState(false);
   const [photoEmailed, setPhotoEmailed] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const formStartedAt = useRef(Date.now());
   const i = t(lang);
 
@@ -49,6 +51,7 @@ export default function EmailCapture({
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setStatus('sending');
+    setErrorMessage('');
 
     const emailOk = await submitEmail(email, fandomId, {
       firstName: firstName.trim(),
@@ -57,13 +60,19 @@ export default function EmailCapture({
       preferredFandom: preferredFandom || undefined,
     });
     if (!emailOk) {
-      setStatus('idle');
+      setErrorMessage('Could not save your email. Please try again.');
+      setStatus('error');
       return;
     }
 
     let emailed = false;
     if (photoId) {
       const result = await sendPhotoEmail(photoId, email.trim(), firstName.trim(), fandomName);
+      if (typeof result === 'object' && 'error' in result) {
+        setErrorMessage(result.error);
+        setStatus('error');
+        return;
+      }
       if (result === 'needs_verification') {
         setNeedsVerification(true);
       } else {
@@ -84,6 +93,28 @@ export default function EmailCapture({
 
     setStatus('sent');
   };
+
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col gap-2 w-full max-w-xs">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded border"
+          style={{
+            borderColor: 'rgba(255,80,80,0.3)',
+            backgroundColor: 'rgba(255,80,80,0.05)',
+          }}>
+          <span className="text-xs tracking-wider" style={{ color: 'rgba(255,120,120,0.9)' }}>
+            {errorMessage}
+          </span>
+        </div>
+        <button
+          onClick={() => { setStatus('idle'); setErrorMessage(''); }}
+          className="text-[10px] tracking-wider cursor-pointer opacity-60 hover:opacity-100"
+          style={{ color: BRAND.colors.gold }}>
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   if (status === 'sent') {
     return (

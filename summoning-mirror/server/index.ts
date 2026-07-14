@@ -270,8 +270,15 @@ function getSmtpUser(): string {
   return cfg.user;
 }
 
-const SMTP_FROM = process.env.SMTP_FROM || 'House of Spells NYC';
-const SMTP_USER = process.env.SMTP_USER || '';
+function isSmtpConfigured(): boolean {
+  const cfg = getSmtpConfig();
+  return Boolean(cfg.user && cfg.pass);
+}
+
+function getSmtpFromAddress(): string {
+  const cfg = getSmtpConfig();
+  return `"${cfg.from}" <${cfg.user}>`;
+}
 const SOCIAL_HANDLE = '@houseofspellsnyc';
 const FOUNDER_URL = 'https://houseofspells.com/register';
 const VISIT_URL = 'https://houseofspells.com/nyc';
@@ -1157,7 +1164,7 @@ async function sendPhotoCardEmail(
   }
 
   await smtpTransport.sendMail({
-    from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+    from: getSmtpFromAddress(),
     to: email,
     subject: 'Your Summoning Mirror Card — House of Spells NYC',
     html: buildPhotoEmailHtml(
@@ -1199,7 +1206,7 @@ app.post('/api/photos/:id/email', async (req, res) => {
     return res.status(400).json({ error: 'firstName required (max 50 chars)' });
   }
 
-  if (!SMTP_USER || !process.env.SMTP_PASS) {
+  if (!isSmtpConfigured()) {
     return res.status(503).json({ error: 'Email service not configured' });
   }
 
@@ -1238,7 +1245,7 @@ app.post('/api/photos/:id/email', async (req, res) => {
     const verifyUrl = `${BASE_URL}/api/email/verify/${verifyToken}`;
     try {
       await smtpTransport.sendMail({
-        from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+        from: getSmtpFromAddress(),
         to: email,
         subject: 'Verify your email — Summoning Mirror',
         html: `<p>Hi ${escapeHtml(safeName)},</p>
@@ -1272,7 +1279,7 @@ app.get('/api/email/verify/:token', async (req, res) => {
     return res.status(400).json({ error: 'Invalid or expired verification link' });
   }
 
-  if (!SMTP_USER || !process.env.SMTP_PASS) {
+  if (!isSmtpConfigured()) {
     return res.status(503).json({ error: 'Email service not configured' });
   }
 
@@ -1615,7 +1622,9 @@ const server = app.listen(PORT, () => {
   console.log(`  Photos: ${PHOTOS_PATH}`);
   console.log(`  Card images: ${CARDS_DIR}`);
   console.log(`  Fandom images: ${FANDOMS_DIR}`);
-  console.log(`  Base URL: ${BASE_URL}\n`);
+  console.log(`  Base URL: ${BASE_URL}`);
+  const smtpCfg = getSmtpConfig();
+  console.log(`  SMTP: ${isSmtpConfigured() ? `configured (${smtpCfg.user} via ${smtpCfg.host})` : 'NOT configured — emails disabled'}\n`);
 });
 
 // --- Email lifecycle scheduler (day 1, 3, 7, 30 follow-ups) ---
@@ -1625,7 +1634,7 @@ const LIFECYCLE_DAYS = [1, 3, 7, 30];
 const LIFECYCLE_CHECK_MS = 30 * 60 * 1000;
 
 async function processLifecycleEmails(): Promise<void> {
-  if (!SMTP_USER || !process.env.SMTP_PASS) return;
+  if (!isSmtpConfigured()) return;
 
   const photos = readPhotos();
   const now = Date.now();
@@ -1649,7 +1658,7 @@ async function processLifecycleEmails(): Promise<void> {
         );
         try {
           await smtpTransport.sendMail({
-            from: `"${SMTP_FROM}" <${SMTP_USER}>`,
+            from: getSmtpFromAddress(),
             to: photo.email,
             subject,
             html,
